@@ -1,0 +1,35 @@
+html {
+    background-color: black;
+}
+
+#chat-input-wrapper {
+    position: absolute;
+    bottom: 0px;
+    background-color: black;
+    color: white;
+    font-size: 18px;
+}
+
+.input-char {
+    font-family: "Courier New", Courier, monospace;
+    display: inline-block;
+    cursor: default;
+}
+
+.input-caret {
+    display: inline-block;
+    background-color: white;
+    color: transparent;
+}
+
+.input-char-space {
+    font-family: "Courier New", Courier, monospace;
+    display: inline-block;
+    color: transparent;
+}
+
+.input-char-caret {
+    display: inline-block;
+    background-color: white;
+    color: black;
+}

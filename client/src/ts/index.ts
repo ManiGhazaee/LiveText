@@ -1,15 +1,27 @@
-import { _, html, id, render, replace, spice } from "./lib.js";
+import { _, id, replace, spice } from "./lib.js";
+import { Socket } from "socket.io-client";
+
+declare function io(opts?: string): Socket;
+
 const root = document.getElementById("root")!;
+
+const socket = io("ws://0.0.0.0:8080");
+
+socket.on("hello", (data: string) => {
+    console.log(data);
+});
+socket.emit("hello", "hello");
+console.log(socket);
 
 let text = "";
 let caretIndex = 0;
 
 window.addEventListener("keydown", (ev) => {
+    console.log(ev.key);
     if (ev.key === "Backspace") {
+        if (caretIndex === 0) return;
         text = spice(text, caretIndex - 1, 1);
-        if (caretIndex !== 0) {
-            caretIndex--;
-        }
+        caretIndex--;
         replaceChatInput();
         return;
     }
@@ -17,6 +29,19 @@ window.addEventListener("keydown", (ev) => {
         text = spice(text, caretIndex, 0, "\n");
         caretIndex++;
         replaceChatInput();
+        return;
+    }
+    if (ev.key === "ArrowRight") {
+        if (caretIndex === text.length) return;
+        caretIndex++;
+        replaceChatInput();
+        return;
+    }
+    if (ev.key === "ArrowLeft") {
+        if (caretIndex === 0) return;
+        caretIndex--;
+        replaceChatInput();
+        return;
     }
     if (ev.key.length > 1) return;
 
@@ -36,47 +61,36 @@ const ChatInput = () => {
     const wrapper = _`;chat-input-wrapper;`;
 
     let textByLines: string[] = text.slice().split("\n");
-
     let charIndex = -1;
+
     for (let i = 0; i < textByLines.length; i++) {
         textByLines[i] += " ";
         const lineWrapper = _`;chat-input-line-wrapper;`;
+
         for (let j = 0; j < textByLines[i].length; j++) {
             charIndex++;
-
             const char = InputChar(textByLines[i][j]);
 
             if (caretIndex === charIndex) {
                 char.classList.add("input-char-caret");
             }
 
-            function x() {
-                const _charIndex = charIndex;
-                return (ev: MouseEvent) => {
-                    ev.stopPropagation();
-                    console.log(_charIndex);
-                    if (ev.target !== char) return;
-                    caretIndex = _charIndex;
-                    replaceChatInput();
-                };
-            }
-
-            char.addEventListener("mousedown", x());
+            const _charIndex = charIndex;
+            char.addEventListener("mousedown", (ev: MouseEvent) => {
+                ev.stopPropagation();
+                caretIndex = _charIndex;
+                replaceChatInput();
+            });
 
             lineWrapper.appendChild(char);
         }
 
-        function x() {
-            const _charIndex = charIndex;
-            return (ev: MouseEvent) => {
-                ev.stopPropagation();
-                console.log("char", _charIndex);
-                console.log(text.length);
-                caretIndex = _charIndex;
-                replaceChatInput();
-            };
-        }
-        lineWrapper.addEventListener("mousedown", x());
+        const _charIndex = charIndex;
+        lineWrapper.addEventListener("mousedown", (ev: MouseEvent) => {
+            ev.stopPropagation();
+            caretIndex = _charIndex;
+            replaceChatInput();
+        });
         wrapper.appendChild(lineWrapper);
     }
 
@@ -96,26 +110,28 @@ const InputChar = (char: string) => {
     switch (char) {
         case ";": {
             char = "CTM_IGNR_SEMIC";
-            break;
         }
         case "%": {
             char = "CTM_IGNR_PERC";
-            break;
         }
         case "`": {
             char = "CTM_IGNR_BCKTICK";
-            break;
         }
         case "'": {
             char = "CTM_IGNR_APOS_1";
-            break;
         }
         case '"': {
             char = "CTM_IGNR_APOS_2";
-            break;
+        }
+        case " ": {
+            const elem = _`;;input-char-space ;_`;
+            elem.innerHTML = "&nbsp;&nbsp;";
+            return elem;
+        }
+        default: {
+            return _`;;input-char;${char}`;
         }
     }
-    return char === " " ? _`;;input-char-space ;_` : _`;;input-char;${char}`;
 };
 
 root.appendChild(ChatInput());
@@ -123,3 +139,5 @@ root.appendChild(ChatInput());
 function replaceChatInput() {
     replace(id("chat-input-wrapper"), ChatInput());
 }
+
+function StatusBar() {}

@@ -1,0 +1,80 @@
+html {
+    background-color: black;
+    font-size: 18px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+#root {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    padding: 8px;
+}
+
+#chat-input-wrapper {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    width: calc(100vw - 16px);
+    background-color: black;
+    color: white;
+    font-size: 18px;
+}
+
+.input-char {
+    font-family: consolas, "Courier New", Courier, monospace;
+    display: inline-block;
+    height: 100%;
+    cursor: default;
+}
+
+.input-caret {
+    display: inline-block;
+    background-color: white;
+    color: transparent;
+    height: 100%;
+    font-size: 18px;
+    animation: blink-animation 1s infinite;
+    cursor: default;
+}
+
+.input-char-space {
+    display: inline-block;
+    height: 100%;
+    font-size: 18px;
+    color: transparent;
+    cursor: default;
+}
+
+.input-char-caret {
+    display: inline-block;
+    background-color: white;
+    color: black;
+    height: 100%;
+    font-size: 18px;
+    animation: blink-animation 1s infinite;
+}
+
+@keyframes blink-animation {
+    0% {
+        background-color: white;
+        color: black;
+    }
+    50% {
+        background-color: white;
+        color: black;
+    }
+    50.01% {
+        background-color: black;
+        color: white;
+    }
+    100% {
+        background-color: black;
+        color: white;
+    }
+}

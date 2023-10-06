@@ -120,7 +120,7 @@ function generateHTMLFromInfo(info: HTMLElementInfo): HTMLElement {
 }
 
 export function ctm(markup?: string | undefined) {
-    if (!markup) return generateHTMLFromInfo(parseHTMLElement(`:`));
+    if (!markup) return generateHTMLFromInfo(parseHTMLElement(`;`));
     return generateHTMLFromInfo(parseHTMLElement(markup));
 }
 
@@ -132,7 +132,7 @@ export function _(strings: TemplateStringsArray, ...expressions: any[]) {
         markup += strings[i];
     }
 
-    if (!markup) return generateHTMLFromInfo(parseHTMLElement(`:`));
+    if (!markup) return generateHTMLFromInfo(parseHTMLElement(`;`));
     return generateHTMLFromInfo(parseHTMLElement(markup));
 }
 
@@ -164,4 +164,39 @@ export function id(id: string) {
  */
 export function spice(string: string, start: number, deleteCount: number, insertString?: string): string {
     return string.slice(0, start) + (insertString || "") + string.slice(start + (deleteCount || 0));
+}
+
+export const enum SettingModes {
+    boolean,
+    number,
+    string,
+}
+
+export class States {
+    [key: string]: {
+        state: any;
+        mode: SettingModes;
+        desc: string;
+        default: any;
+        max?: number;
+        min?: number;
+    };
+    constructor(
+        states: { name: string; mode: SettingModes; desc: string; default: any; min?: number; max?: number }[]
+    ) {
+        for (const i of states) {
+            this[i.name] = {
+                mode: i.mode,
+                state: i.default,
+                desc: i.desc,
+                default: i.default,
+            };
+            if (i.min) {
+                this[i.name].min = i.min;
+            }
+            if (i.max) {
+                this[i.name].max = i.max;
+            }
+        }
+    }
 }

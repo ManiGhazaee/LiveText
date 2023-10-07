@@ -200,3 +200,100 @@ export class States {
         }
     }
 }
+
+export function insertHTMLElementAt<T extends Element>(root: T, HTMLElement: T, index: number) {
+    if (!root) return;
+
+    if (root.children.length === 0 || index === root.children.length) {
+        root.appendChild(HTMLElement);
+    } else {
+        root.insertBefore(HTMLElement, root.children[index]);
+    }
+}
+
+export function deleteHTMLElementAt<T extends Element>(root: T, index: number) {
+    if (!root || !root.children || root.children.length === 0) return;
+
+    root.children[index].remove();
+}
+
+export function clearClassForEach<T extends Element>(root: T, className: string) {
+    if (!root || !root.children || root.children.length === 0) return;
+    const children = root.children;
+    for (const i of children) {
+        i.classList.remove(className);
+    }
+}
+
+export function addClassAt<T extends Element>(root: T, className: string, index: number) {
+    if (!root || !root.children || root.children.length === 0) return;
+    root.children[index]?.classList.add(className);
+}
+
+export function updateHtmlElement(
+    oldElement: HTMLElement,
+    newElement: HTMLElement,
+    oldElementEvent?: keyof HTMLElementEventMap,
+    oldElementEventListener?: (this: HTMLElement, ev: HTMLElementEventMap[keyof HTMLElementEventMap]) => any
+) {
+    // Compare the tag names of the elements
+    // if (oldElement.tagName !== newElement.tagName) {
+    //     throw new Error("Elements have different tag names");
+    // }
+
+    // Compare the classes of the elements
+    if (oldElement.className !== newElement.className) {
+        oldElement.className = newElement.className;
+    }
+
+    // Compare the attributes of the elements
+    // for (const attr of newElement.attributes) {
+    //     if (oldElement.getAttribute(attr.name) !== attr.value) {
+    //         oldElement.setAttribute(attr.name, attr.value);
+    //     }
+    // }
+
+    // Compare the child nodes of the elements
+    const oldChildren = Array.from(oldElement.childNodes);
+    const newChildren = Array.from(newElement.childNodes);
+
+    for (let i = 0; i < newChildren.length; i++) {
+        const oldChild = oldChildren[i];
+        const newChild = newChildren[i];
+
+        if (!oldChild) {
+            // If there is no corresponding old child, insert the new child
+            oldElement.appendChild(newChild);
+        } else if (oldChild.nodeType !== newChild.nodeType) {
+            // If the node types are different, replace the old child with the new child
+            oldElement.replaceChild(newChild, oldChild);
+        } else if (oldChild.nodeType === Node.ELEMENT_NODE && oldChild.childNodes.length > 0) {
+            // If the child nodes are both elements, recursively compare and update them
+            updateHtmlElement(
+                oldChild as HTMLElement,
+                newChild as HTMLElement,
+                oldElementEvent,
+                oldElementEventListener
+            );
+        } else if (oldChild.nodeValue !== newChild.nodeValue) {
+            // If the node values are different, update the old node value with the new value
+            oldChild.nodeValue = newChild.nodeValue;
+        }
+    }
+
+    // Remove any extra old child nodes that weren't present in the new element
+    while (oldChildren.length > newChildren.length) {
+        oldElement.removeChild(oldChildren[oldChildren.length - 1]);
+    }
+
+    if (oldElementEvent && oldElementEventListener) {
+        oldElement.addEventListener(oldElementEvent, oldElementEventListener);
+    }
+}
+
+export function hoursAndMinutes(time: Date | string): string {
+    return `${new Date(time).getHours().toString().padStart(2, "0")}:${new Date(time)
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`;
+}

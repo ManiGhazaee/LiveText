@@ -1,21 +1,20 @@
-import { _, id, replace, spice, SettingModes, States } from "./lib.js";
+import { _, id, replace, spice, SettingModes, States, updateHtmlElement, hoursAndMinutes } from "./lib.js";
 import { Socket } from "socket.io-client";
 
 declare function io(opts?: string): Socket;
 
 const root = document.getElementById("root")!;
 
-const socket = io("ws://0.0.0.0:8080");
+// const socket = io("ws://0.0.0.0:8080");
 
-socket.on("hello", (data: string) => {
-    console.log(data);
-});
-socket.emit("hello", "hello");
-console.log(socket);
+// socket.on("hello", (data: string) => {
+//     console.log(data);
+// });
+// socket.emit("hello", "hello");
 
-let text = "";
+let text = ``;
 let caretIndex = 0;
-let settingState = true;
+let settingState = false;
 let isShiftPressed = false;
 
 const states = new States([
@@ -28,6 +27,13 @@ const states = new States([
         max: 40,
     },
 ]);
+
+function main() {
+    root.appendChild(TextRender(text, "text-wrapper"));
+    root.appendChild(Setting(settingState));
+    root.appendChild(StatusBar());
+}
+main();
 
 window.addEventListener("keyup", (ev) => {
     if (ev.key === "Shift") {
@@ -43,29 +49,29 @@ window.addEventListener("keydown", (ev) => {
             if (caretIndex === 0) return;
             text = spice(text, caretIndex - 1, 1);
             caretIndex--;
-            replaceChatInput();
+            changeText();
             return;
         }
         case "Enter": {
             if (isShiftPressed) {
-                sendMessage();
+                handleShiftEnter();
                 return;
             }
             text = spice(text, caretIndex, 0, "\n");
             caretIndex++;
-            replaceChatInput();
+            replaceText();
             return;
         }
         case "ArrowRight": {
             if (caretIndex === text.length) return;
             caretIndex++;
-            replaceChatInput();
+            changeText();
             return;
         }
         case "ArrowLeft": {
             if (caretIndex === 0) return;
             caretIndex--;
-            replaceChatInput();
+            changeText();
             return;
         }
         case "Escape": {
@@ -79,105 +85,98 @@ window.addEventListener("keydown", (ev) => {
     }
     if (ev.key.length > 1) return;
 
-    if (ev.key === ";") {
-        text = spice(text, caretIndex, 0, ";");
-    } else {
-        text = spice(text, caretIndex, 0, ev.key);
-    }
+    text = spice(text, caretIndex, 0, ev.key);
     caretIndex++;
-    replaceChatInput();
-    console.log("text", text);
-    // console.log("text", text);
-    // console.log("caretIndex", caretIndex);
-    // console.log("chatInput", ChatInput());
+    changeText();
 });
 
-function sendMessage() {
-    text = "";
-    caretIndex = 0;
-    replaceChatInput();
+function handleShiftEnter() {
+    if (text.endsWith("/clear")) {
+        text = "";
+        caretIndex = text.length;
+        replaceText();
+        return;
+    }
+
+    sendMessage();
 }
 
-const ChatInput = () => {
-    const wrapper = _`;chat-input-wrapper;`;
+function sendMessage() {
+    text += `\n//{${"John"}}To:{${"Mani"}}At:{${hoursAndMinutes(new Date())}}\n\n`;
+    caretIndex = text.length;
+    replaceText();
+}
+
+function TextRender(text: string, wrapperId: string) {
+    const wrapper = document.createElement("div");
+    wrapper.id = `text-wrapper`;
 
     let textByLines: string[] = text.slice().split("\n");
     let charIndex = -1;
 
     for (let i = 0; i < textByLines.length; i++) {
         textByLines[i] += " ";
-        const lineWrapper = _`;chat-input-line-wrapper;`;
+        const lineWrapper = document.createElement("div");
 
         for (let j = 0; j < textByLines[i].length; j++) {
             charIndex++;
             const char = InputChar(textByLines[i][j]);
 
             if (caretIndex === charIndex) {
-                char.classList.add("input-char-caret");
+                char.classList.add("text-char-caret");
             }
 
-            const _charIndex = charIndex;
-            char.addEventListener("mousedown", (ev: MouseEvent) => {
-                ev.stopPropagation();
-                caretIndex = _charIndex;
-                replaceChatInput();
-            });
-
+            char.id = charIndex.toString();
             lineWrapper.appendChild(char);
         }
 
-        const _charIndex = charIndex;
-        lineWrapper.addEventListener("mousedown", (ev: MouseEvent) => {
-            ev.stopPropagation();
-            caretIndex = _charIndex;
-            replaceChatInput();
-        });
         wrapper.appendChild(lineWrapper);
     }
 
-    wrapper.addEventListener("click", (ev) => {
-        if (ev.target !== wrapper) return;
-        // caretIndex = text.length;
-        replaceChatInput();
+    wrapper.addEventListener("mousedown", (ev) => {
+        const target = ev.target as HTMLElement;
+        if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
+            caretIndex = parseInt(target.id);
+        } else {
+            caretIndex = text.length;
+        }
+        replaceText();
     });
     return wrapper;
-};
+}
 
-const InputChar = (char: string) => {
-    switch (char) {
-        case ";": {
-            char = "CTM_IGNR_SEMIC";
-            break;
-        }
-        case "%": {
-            char = "CTM_IGNR_PERC";
-            break;
-        }
-        case "`": {
-            char = "CTM_IGNR_BCKTICK";
-            break;
-        }
-        case "'": {
-            char = "CTM_IGNR_APOS_1";
-            break;
-        }
-        case '"': {
-            char = "CTM_IGNR_APOS_2";
-            break;
-        }
-        case " ": {
-            const elem = _`;;input-char-space ;_`;
-            elem.innerHTML = "&nbsp;";
-            return elem;
-        }
+function InputChar(char: string) {
+    const elem = document.createElement("div");
+    elem.className = "text-char";
+    if (char === " ") {
+        elem.append("\u00A0");
+    } else {
+        elem.textContent = char;
     }
-    return _`;;input-char;${char}`;
-};
+    return elem;
+}
 
-root.appendChild(ChatInput());
+function changeText() {
+    const newText = TextRender(text, "text-wrapper");
+    const wrapper = id("text-wrapper");
+    const listener = (ev: Event) => {
+        const target = ev.target as HTMLElement;
+        if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
+            caretIndex = parseInt(target.id);
+        } else {
+            caretIndex = text.length;
+        }
+        replaceText();
+    };
+    updateHtmlElement(wrapper, newText);
+    const newWrapper = id("text-wrapper");
+    newWrapper.addEventListener("mousedown", listener);
+}
 
-function replaceChatInput() {
-    replace(id("chat-input-wrapper"), ChatInput());
+function replaceText() {
+    const newChatInput = TextRender(text, "text-wrapper");
+    const wrapper = id("text-wrapper");
+    replace(wrapper, newChatInput);
 }
 
 function replaceSetting() {
@@ -191,7 +190,7 @@ function Setting(displayState: boolean) {
 
     const wrapper = _`
     ;setting-wrapper;
-        ;;;Setting;%%style=padding-left: 8px; position: relative;
+        ;;;Setting;%%style=position: relative;
             ;setting-close;;Close;
     `;
 
@@ -245,10 +244,6 @@ function Setting(displayState: boolean) {
     return wrapper;
 }
 
-// setInterval(() => {
-//     console.log(states.font_size.state);
-// }, 500);
-
 function correctByMinMax(stateName: string) {
     const item = states[stateName];
 
@@ -258,6 +253,14 @@ function correctByMinMax(stateName: string) {
     }
 }
 
-root.appendChild(Setting(settingState));
+function StatusBar() {
+    const wrapper = _`;status-bar;`;
+    const bluh = _`;;;Other: John/`;
 
-function chat() {}
+    wrapper.appendChild(bluh);
+    return wrapper;
+}
+
+// setInterval(() => {
+//     console.log(states.font_size.state);
+// }, 500);

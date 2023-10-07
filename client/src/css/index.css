@@ -16,12 +16,11 @@ html {
     position: relative;
     width: 100vw;
     height: 100vh;
-    padding: 8px;
 }
 
-#chat-input-wrapper {
+#text-wrapper {
     position: absolute;
-    bottom: 8px;
+    bottom: 30px;
     left: 8px;
     width: calc(100vw - 16px);
     background-color: black;
@@ -29,32 +28,15 @@ html {
     font-size: 18px;
 }
 
-.input-char {
+.text-char {
     font-family: consolas, "Courier New", Courier, monospace;
     display: inline-block;
-    height: 100%;
-    cursor: default;
-}
-
-.input-caret {
-    display: inline-block;
-    background-color: white;
-    color: transparent;
-    height: 100%;
     font-size: 18px;
-    animation: blink-animation 1s infinite;
-    cursor: default;
-}
-
-.input-char-space {
-    display: inline-block;
     height: 100%;
-    font-size: 18px;
-    color: transparent;
     cursor: default;
 }
 
-.input-char-caret {
+.text-char-caret {
     display: inline-block;
     background-color: white;
     color: black;
@@ -95,7 +77,6 @@ html {
     outline: none;
     cursor: default;
     width: 100%;
-    padding-left: 8px;
 }
 .setting-item:hover {
     background-color: rgb(49, 49, 49);
@@ -103,9 +84,8 @@ html {
 
 .setting-item-state {
     display: inline-block;
-    margin-left: 10px;
     cursor: default;
-    right: 8px;
+    right: 0px;
     position: absolute;
 }
 
@@ -113,7 +93,6 @@ html {
     display: inline-block;
     position: absolute;
     right: 0px;
-    padding: 0px 8px;
     margin-right: 0px;
     cursor: default;
 }
@@ -121,4 +100,14 @@ html {
 #setting-close:hover {
     background-color: white;
     color: black;
+}
+
+#status-bar {
+    background-color: white;
+    width: calc(100vw - 16px);
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    color: black;
+    font-weight: 900;
 }

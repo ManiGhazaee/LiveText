@@ -26,12 +26,14 @@ const root = document.getElementById("root")!;
 // });
 // socket.emit("hello", "hello");
 
-// let text = `i`.repeat(2000) + "K".repeat(970);
-let text = "";
-let caretIndex = 0;
+let text = `a`.repeat(20) + "b".repeat(20) + "c".repeat(20) + "d".repeat(20);
+// let text = "";
+let caretIndex = text.length;
 let settingState = false;
 let isShiftPressed = false;
-let maxTextLength = 300;
+let maxTextLength = 9000;
+let textRenderLimit = 40;
+let textRenderOffsetEnd = 0;
 
 const states = new States([
     {
@@ -65,7 +67,7 @@ window.addEventListener("keydown", (ev) => {
             if (caretIndex === 0) return;
             text = spice(text, caretIndex - 1, 1);
             text = removeFromStart(text, maxTextLength);
-            caretIndex = clamp(0, caretIndex, maxTextLength);
+            caretIndex = clamp(0, caretIndex - 1, maxTextLength);
             changeText();
             return;
         }
@@ -127,18 +129,24 @@ function handleShiftEnter() {
 }
 
 function sendMessage() {
-    text += `\n//--${"John"}--To:${"Mani"}--${hoursAndMinutes(new Date())}--\n\n`;
+    text += `\n/*${"John"}|${hoursAndMinutes(new Date())}*/\n\n`;
     text = removeFromStart(text, maxTextLength);
     caretIndex = clamp(0, text.length, maxTextLength);
 
     changeText();
 }
 
-function TextRender(text: string, wrapperId: string) {
+function TextRender(text: string, wrapperId: string, limit?: number, offsetEnd?: number) {
     const wrapper = document.createElement("div");
     wrapper.id = wrapperId;
 
-    let textByLines: string[] = text.slice().split("\n");
+    let textByLines: string[];
+    if (limit && offsetEnd) {
+        textByLines = text.slice(text.length - limit + offsetEnd, text.length - offsetEnd).split("\n");
+    } else {
+        textByLines = text.slice().split("\n");
+    }
+
     let charIndex = -1;
 
     for (let i = 0; i < textByLines.length; i++) {
@@ -153,26 +161,13 @@ function TextRender(text: string, wrapperId: string) {
                 char.classList.add("caret");
             }
 
-            char.id = charIndex.toString();
             lineWrapper.appendChild(char);
         }
 
         wrapper.appendChild(lineWrapper);
     }
 
-    wrapper.addEventListener("mousedown", (ev) => {
-        const target = ev.target as HTMLElement;
-        if (target.classList.contains("text-char") || target.classList.contains("text-char-space")) {
-            caretIndex = parseInt(target.id);
-            clearClassNameForTextWrapper("caret");
-            if (!target.classList.contains("caret")) {
-                target.classList.add("caret");
-            }
-        } else {
-            caretIndex = text.length;
-            replaceText();
-        }
-    });
+    wrapper.addEventListener("mousedown", textWrapperListener);
     return wrapper;
 }
 
@@ -216,15 +211,35 @@ function clearClassNameForTextWrapper(className: string) {
 
 function textWrapperListener(ev: Event) {
     const target = ev.target as HTMLElement;
-    if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
-        caretIndex = parseInt(target.id);
+
+    if (target.classList.contains("text-char") || target.classList.contains("text-char-space")) {
+        const wrapperChildren = id("text-wrapper").children;
+        let targetIndex = 0;
+
+        let prevChildrenLengthSum = 0;
+
+        for (let i = 0; i < wrapperChildren.length; i++) {
+            const children = Array.from(wrapperChildren[i].children);
+            if (children.indexOf(target) !== -1) {
+                targetIndex = children.indexOf(target);
+                break;
+            }
+            prevChildrenLengthSum += children.length;
+        }
+
+        caretIndex = prevChildrenLengthSum + targetIndex;
+
         clearClassNameForTextWrapper("caret");
+
         if (!target.classList.contains("caret")) {
             target.classList.add("caret");
         }
     } else {
         caretIndex = text.length;
-        replaceText();
+        clearClassNameForTextWrapper("caret");
+        const wrapperChildren = id("text-wrapper").children;
+        (wrapperChildren[wrapperChildren.length - 1].lastChild as HTMLElement)?.classList.add("caret");
+        // replaceText();
     }
 }
 

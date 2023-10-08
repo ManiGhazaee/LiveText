@@ -1,6 +1,6 @@
 html {
     color: white;
-    font-family: consolas, "Courier New", Courier, monospace;
+    font-family:  monospace;
     background-color: black;
     font-size: 18px;
     overflow: hidden;
@@ -29,14 +29,13 @@ html {
 }
 
 .text-char {
-    font-family: consolas, "Courier New", Courier, monospace;
     display: inline-block;
     font-size: 18px;
     height: 100%;
     cursor: default;
 }
 
-.text-char-caret {
+.caret {
     display: inline-block;
     background-color: white;
     color: black;
@@ -102,7 +101,7 @@ html {
     color: black;
 }
 
-#status-bar {
+#StatusBar {
     background-color: white;
     width: calc(100vw - 16px);
     position: absolute;

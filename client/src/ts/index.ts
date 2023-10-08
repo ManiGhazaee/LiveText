@@ -1,4 +1,18 @@
-import { _, id, replace, spice, SettingModes, States, updateHtmlElement, hoursAndMinutes } from "./lib.js";
+import {
+    _,
+    id,
+    replace,
+    spice,
+    SettingModes,
+    States,
+    updateTextWrapperHtml,
+    updateHtmlElement,
+    hoursAndMinutes,
+    clamp,
+    render,
+    insertHTMLElementAt,
+    clearClassForEach,
+} from "./lib.js";
 import { Socket } from "socket.io-client";
 
 declare function io(opts?: string): Socket;
@@ -12,10 +26,12 @@ const root = document.getElementById("root")!;
 // });
 // socket.emit("hello", "hello");
 
-let text = ``;
+// let text = `i`.repeat(2000) + "K".repeat(970);
+let text = "";
 let caretIndex = 0;
 let settingState = false;
 let isShiftPressed = false;
+let maxTextLength = 300;
 
 const states = new States([
     {
@@ -48,29 +64,33 @@ window.addEventListener("keydown", (ev) => {
         case "Backspace": {
             if (caretIndex === 0) return;
             text = spice(text, caretIndex - 1, 1);
-            caretIndex--;
+            text = removeFromStart(text, maxTextLength);
+            caretIndex = clamp(0, caretIndex, maxTextLength);
             changeText();
             return;
         }
         case "Enter": {
             if (isShiftPressed) {
                 handleShiftEnter();
+                text = removeFromStart(text, maxTextLength);
+                caretIndex = clamp(0, caretIndex, maxTextLength);
                 return;
             }
             text = spice(text, caretIndex, 0, "\n");
-            caretIndex++;
+            text = removeFromStart(text, maxTextLength);
+            caretIndex = clamp(0, caretIndex + 1, maxTextLength);
             replaceText();
             return;
         }
         case "ArrowRight": {
             if (caretIndex === text.length) return;
-            caretIndex++;
+            caretIndex = clamp(0, caretIndex + 1, maxTextLength);
             changeText();
             return;
         }
         case "ArrowLeft": {
             if (caretIndex === 0) return;
-            caretIndex--;
+            caretIndex = clamp(0, caretIndex - 1, maxTextLength);
             changeText();
             return;
         }
@@ -86,8 +106,13 @@ window.addEventListener("keydown", (ev) => {
     if (ev.key.length > 1) return;
 
     text = spice(text, caretIndex, 0, ev.key);
-    caretIndex++;
+    text = removeFromStart(text, maxTextLength);
+    if (text.length !== maxTextLength) {
+        caretIndex = clamp(0, caretIndex + 1, maxTextLength);
+    }
     changeText();
+    console.log("ci", caretIndex);
+    console.log("tl", text.length);
 });
 
 function handleShiftEnter() {
@@ -102,14 +127,16 @@ function handleShiftEnter() {
 }
 
 function sendMessage() {
-    text += `\n//{${"John"}}To:{${"Mani"}}At:{${hoursAndMinutes(new Date())}}\n\n`;
-    caretIndex = text.length;
-    replaceText();
+    text += `\n//--${"John"}--To:${"Mani"}--${hoursAndMinutes(new Date())}--\n\n`;
+    text = removeFromStart(text, maxTextLength);
+    caretIndex = clamp(0, text.length, maxTextLength);
+
+    changeText();
 }
 
 function TextRender(text: string, wrapperId: string) {
     const wrapper = document.createElement("div");
-    wrapper.id = `text-wrapper`;
+    wrapper.id = wrapperId;
 
     let textByLines: string[] = text.slice().split("\n");
     let charIndex = -1;
@@ -123,7 +150,7 @@ function TextRender(text: string, wrapperId: string) {
             const char = InputChar(textByLines[i][j]);
 
             if (caretIndex === charIndex) {
-                char.classList.add("text-char-caret");
+                char.classList.add("caret");
             }
 
             char.id = charIndex.toString();
@@ -135,12 +162,16 @@ function TextRender(text: string, wrapperId: string) {
 
     wrapper.addEventListener("mousedown", (ev) => {
         const target = ev.target as HTMLElement;
-        if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
+        if (target.classList.contains("text-char") || target.classList.contains("text-char-space")) {
             caretIndex = parseInt(target.id);
+            clearClassNameForTextWrapper("caret");
+            if (!target.classList.contains("caret")) {
+                target.classList.add("caret");
+            }
         } else {
             caretIndex = text.length;
+            replaceText();
         }
-        replaceText();
     });
     return wrapper;
 }
@@ -159,23 +190,50 @@ function InputChar(char: string) {
 function changeText() {
     const newText = TextRender(text, "text-wrapper");
     const wrapper = id("text-wrapper");
-    const listener = (ev: Event) => {
-        const target = ev.target as HTMLElement;
-        if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
-            caretIndex = parseInt(target.id);
-        } else {
-            caretIndex = text.length;
+
+    reReplace({
+        fn: StatusBar,
+    });
+
+    updateTextWrapperHtml(wrapper, newText);
+    // const newWrapper = id("text-wrapper");
+    // newWrapper.addEventListener("mousedown", textWrapperListener);
+}
+
+function clearClassNameForTextWrapper(className: string) {
+    const warpper = id("text-wrapper");
+    for (const i of warpper.children) {
+        if (i.classList.contains(className)) {
+            i.classList.remove(className);
         }
+        for (const j of i.children) {
+            if (j.classList.contains(className)) {
+                j.classList.remove(className);
+            }
+        }
+    }
+}
+
+function textWrapperListener(ev: Event) {
+    const target = ev.target as HTMLElement;
+    if (target.classList.contains("input-char") || target.classList.contains("input-char-space")) {
+        caretIndex = parseInt(target.id);
+        clearClassNameForTextWrapper("caret");
+        if (!target.classList.contains("caret")) {
+            target.classList.add("caret");
+        }
+    } else {
+        caretIndex = text.length;
         replaceText();
-    };
-    updateHtmlElement(wrapper, newText);
-    const newWrapper = id("text-wrapper");
-    newWrapper.addEventListener("mousedown", listener);
+    }
 }
 
 function replaceText() {
     const newChatInput = TextRender(text, "text-wrapper");
     const wrapper = id("text-wrapper");
+    reReplace({
+        fn: StatusBar,
+    });
     replace(wrapper, newChatInput);
 }
 
@@ -254,11 +312,28 @@ function correctByMinMax(stateName: string) {
 }
 
 function StatusBar() {
-    const wrapper = _`;status-bar;`;
-    const bluh = _`;;;Other: John/`;
+    const wrapper = _`;StatusBar;`;
+    const bluh = _`;;;--TALK--|TextLength:${text.length}/${maxTextLength}`;
 
     wrapper.appendChild(bluh);
     return wrapper;
+}
+
+interface ReRenderParam {
+    fn: (...args: any[]) => HTMLElement;
+    root?: HTMLElement;
+    params?: any;
+}
+
+function reReplace(...items: ReRenderParam[]) {
+    for (let i = 0; i < items.length; i++) {
+        replace(items[i].root ?? id(items[i].fn.name), items[i].fn(items[i].params));
+    }
+}
+
+function removeFromStart(string: string, limit: number) {
+    if (string.length < limit) return string;
+    return string.slice(string.length - limit, string.length);
 }
 
 // setInterval(() => {

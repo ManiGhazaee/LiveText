@@ -230,64 +230,146 @@ export function addClassAt<T extends Element>(root: T, className: string, index:
     root.children[index]?.classList.add(className);
 }
 
-export function updateHtmlElement(
-    oldElement: HTMLElement,
-    newElement: HTMLElement,
-    oldElementEvent?: keyof HTMLElementEventMap,
-    oldElementEventListener?: (this: HTMLElement, ev: HTMLElementEventMap[keyof HTMLElementEventMap]) => any
-) {
-    // Compare the tag names of the elements
-    // if (oldElement.tagName !== newElement.tagName) {
-    //     throw new Error("Elements have different tag names");
-    // }
+export function updateHtmlElement(oldElement: HTMLElement, newElement: HTMLElement) {
+    try {
+        // Compare the tag names of the elements
+        // if (oldElement.tagName !== newElement.tagName) {
+        //     throw new Error("Elements have different tag names");
+        // }
 
-    // Compare the classes of the elements
-    if (oldElement.className !== newElement.className) {
-        oldElement.className = newElement.className;
+        const newElementClone = newElement.cloneNode(true);
+        // Compare the classes of the elements
+        if (oldElement.className !== newElement.className) {
+            oldElement.className = newElement.className;
+        }
+
+        // Compare the attributes of the elements
+        // for (const attr of newElement.attributes) {
+        //     if (oldElement.getAttribute(attr.name) !== attr.value) {
+        //         oldElement.setAttribute(attr.name, attr.value);
+        //     }
+        // }
+
+        // Compare the child nodes of the elements
+        const oldChildren = Array.from(oldElement.childNodes);
+        const newChildren = Array.from(newElement.childNodes);
+
+        for (let i = newChildren.length - 1; i >= 0; i--) {
+            const oldChild = oldChildren[i];
+            const newChild = newChildren[i];
+
+            if (!oldChild) {
+                // If there is no corresponding old child, insert the new child
+                oldElement.appendChild(newChild.cloneNode(true));
+            } else if (oldChild.nodeType !== newChild.nodeType) {
+                // If the node types are different, replace the old child with the new child
+                oldElement.replaceChild(newChild.cloneNode(true), oldChild);
+            } else if (oldChild.nodeType === Node.ELEMENT_NODE && oldChild.childNodes.length > 0) {
+                // If the child nodes are both elements, recursively compare and update them
+                updateHtmlElement(oldChild as HTMLElement, newChild as HTMLElement);
+            } else if (oldChild.nodeValue !== newChild.nodeValue) {
+                // If the node values are different, update the old node value with the new value
+                oldChild.nodeValue = newChild.nodeValue;
+            }
+        }
+
+        // Remove any extra old child nodes that weren't present in the new element
+        while (oldChildren.length > newChildren.length) {
+            oldElement.removeChild(oldChildren[oldChildren.length - 1]);
+        }
+    } catch (e) {
+        console.error(e);
     }
+}
 
-    // Compare the attributes of the elements
-    // for (const attr of newElement.attributes) {
-    //     if (oldElement.getAttribute(attr.name) !== attr.value) {
-    //         oldElement.setAttribute(attr.name, attr.value);
-    //     }
-    // }
+export function updateTextWrapperHtml(oldElement: HTMLElement, newElement: HTMLElement) {
+    const newElementChildren = newElement.childNodes as NodeListOf<HTMLElement>;
+    const oldElementChildren = oldElement.childNodes as NodeListOf<HTMLElement>;
 
-    // Compare the child nodes of the elements
-    const oldChildren = Array.from(oldElement.childNodes);
-    const newChildren = Array.from(newElement.childNodes);
-
-    for (let i = 0; i < newChildren.length; i++) {
-        const oldChild = oldChildren[i];
-        const newChild = newChildren[i];
-
-        if (!oldChild) {
-            // If there is no corresponding old child, insert the new child
-            oldElement.appendChild(newChild);
-        } else if (oldChild.nodeType !== newChild.nodeType) {
-            // If the node types are different, replace the old child with the new child
-            oldElement.replaceChild(newChild, oldChild);
-        } else if (oldChild.nodeType === Node.ELEMENT_NODE && oldChild.childNodes.length > 0) {
-            // If the child nodes are both elements, recursively compare and update them
-            updateHtmlElement(
-                oldChild as HTMLElement,
-                newChild as HTMLElement,
-                oldElementEvent,
-                oldElementEventListener
-            );
-        } else if (oldChild.nodeValue !== newChild.nodeValue) {
-            // If the node values are different, update the old node value with the new value
-            oldChild.nodeValue = newChild.nodeValue;
+    if (oldElementChildren.length < newElementChildren.length) {
+        for (let i = 0; i < newElementChildren.length; i++) {
+            if (oldElementChildren[i] === undefined) {
+                if (oldElementChildren[0].parentNode) {
+                    oldElementChildren[0].parentNode.appendChild(newElementChildren[i].cloneNode(true) as HTMLElement);
+                }
+                continue;
+            }
+        }
+    } else if (oldElementChildren.length > newElementChildren.length) {
+        for (let i = 0; i < oldElementChildren.length; i++) {
+            if (newElementChildren[i] === undefined) {
+                oldElementChildren[i].remove();
+                i--;
+                continue;
+            }
         }
     }
 
-    // Remove any extra old child nodes that weren't present in the new element
-    while (oldChildren.length > newChildren.length) {
-        oldElement.removeChild(oldChildren[oldChildren.length - 1]);
-    }
+    for (let i = 0; i < newElementChildren.length; i++) {
+        const newChildChildren = newElementChildren[i].childNodes as NodeListOf<HTMLElement>;
+        const oldChildChildren = oldElementChildren[i].childNodes as NodeListOf<HTMLElement>;
 
-    if (oldElementEvent && oldElementEventListener) {
-        oldElement.addEventListener(oldElementEvent, oldElementEventListener);
+        if (newChildChildren.length === 0) {
+            const firstChild = oldElementChildren[i].firstChild;
+            while (firstChild) {
+                firstChild.remove();
+            }
+        }
+
+        if (oldChildChildren.length < newChildChildren.length) {
+            for (let i = 0; i < newChildChildren.length; i++) {
+                if (oldChildChildren[i] === undefined) {
+                    if (oldChildChildren[0].parentNode) {
+                        oldChildChildren[0].parentNode.appendChild(newChildChildren[i].cloneNode(true) as HTMLElement);
+                    }
+                    continue;
+                }
+                if (oldChildChildren[i].className !== newChildChildren[i].className) {
+                    oldChildChildren[i].className = newChildChildren[i].className;
+                }
+                if (oldChildChildren[i].textContent !== newChildChildren[i].textContent) {
+                    if (newChildChildren[i].textContent === " ") {
+                        oldChildChildren[i].textContent = "";
+                        oldChildChildren[i].append("\u00A0");
+                    } else {
+                        oldChildChildren[i].textContent = newChildChildren[i].textContent;
+                    }
+                }
+            }
+        } else if (oldChildChildren.length > newChildChildren.length) {
+            for (let i = 0; i < oldChildChildren.length; i++) {
+                if (newChildChildren[i] === undefined) {
+                    oldChildChildren[i].remove();
+                    i--;
+                    continue;
+                }
+                if (oldChildChildren[i].className !== newChildChildren[i].className) {
+                    oldChildChildren[i].className = newChildChildren[i].className;
+                }
+                if (oldChildChildren[i].textContent !== newChildChildren[i].textContent) {
+                    if (newChildChildren[i].textContent === " ") {
+                        oldChildChildren[i].textContent = "";
+                        oldChildChildren[i].append("\u00A0");
+                    } else {
+                        oldChildChildren[i].textContent = newChildChildren[i].textContent;
+                    }
+                }
+            }
+        } else {
+            for (let i = 0; i < oldChildChildren.length; i++) {
+                if (oldChildChildren[i].className !== newChildChildren[i].className) {
+                    oldChildChildren[i].className = newChildChildren[i].className;
+                }
+                if (oldChildChildren[i].textContent !== newChildChildren[i].textContent) {
+                    if (newChildChildren[i].textContent === " ") {
+                        oldChildChildren[i].textContent = "";
+                        oldChildChildren[i].append("\u00A0");
+                    } else {
+                        oldChildChildren[i].textContent = newChildChildren[i].textContent;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -296,4 +378,20 @@ export function hoursAndMinutes(time: Date | string): string {
         .getMinutes()
         .toString()
         .padStart(2, "0")}`;
+}
+
+export function clamp(min: number, numbers: number, max: number): number;
+export function clamp(min: number, numbers: number[], max: number): number[];
+export function clamp(min: number, numbers: number | number[], max: number): number | number[] {
+    if (min > max)
+        throw new Error(`The minimum value cannot be greater than the maximum value.\nmin: ${min}\nmax: ${max}`);
+    if (!Array.isArray(numbers)) {
+        return Math.max(Math.min(numbers, max), min);
+    } else {
+        let result: number[] = [];
+        for (let i = 0; i < numbers.length; i++) {
+            result.push(Math.max(Math.min(numbers[i], max), min));
+        }
+        return result;
+    }
 }

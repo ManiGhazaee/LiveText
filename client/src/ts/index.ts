@@ -6,34 +6,105 @@ import {
     SettingModes,
     States,
     updateTextWrapperHtml,
-    updateHtmlElement,
     hoursAndMinutes,
     clamp,
-    render,
-    insertHTMLElementAt,
-    clearClassForEach,
+    reReplace,
 } from "./lib.js";
 import { Socket } from "socket.io-client";
 
-declare function io(opts?: string): Socket;
+enum EGlobalStatus {
+    Talk = "TALK",
+    Listen = "LISTEN",
+    Idle = "IDLE",
+    Connecting = "CONNECTING",
+    Menu = "MENU",
+    Setting = "SETTING",
+}
+
+class GlobalStatus {
+    private _state: EGlobalStatus;
+    public prev: EGlobalStatus;
+    constructor(initVal: EGlobalStatus) {
+        this._state = initVal;
+        this.prev = initVal;
+    }
+    get state() {
+        return this._state;
+    }
+    set state(newVal: EGlobalStatus) {
+        this.prev = this._state;
+        this._state = newVal;
+        reReplace({
+            fn: StatusBar,
+        });
+    }
+    toggle(valA: EGlobalStatus, valB: EGlobalStatus) {
+        if (this._state === valA) {
+            this.state = valB;
+        } else if (this._state === valB) {
+            this.state = valA;
+        } else {
+            this.state = valA;
+        }
+    }
+}
+
+class PressedKeys {
+    pressed: string[];
+    Shift = false;
+    Control = false;
+    constructor() {
+        this.pressed = [];
+    }
+    down(key: string) {
+        if (!this.pressed.includes(key)) {
+            this.pressed.push(key);
+        }
+        if (key in this) {
+            // @ts-expect-error
+            this[key] = true;
+        }
+    }
+    up(key: string) {
+        const index = this.pressed.indexOf(key);
+        if (index !== -1) {
+            this.pressed.splice(index, 1);
+        }
+        if (key in this) {
+            // @ts-expect-error
+            this[key] = false;
+        }
+    }
+}
+
+let pressedKeys = new PressedKeys();
 
 const root = document.getElementById("root")!;
-
-// const socket = io("ws://0.0.0.0:8080");
-
-// socket.on("hello", (data: string) => {
-//     console.log(data);
-// });
-// socket.emit("hello", "hello");
-
-let text = `a`.repeat(20) + "b".repeat(20) + "c".repeat(20) + "d".repeat(20);
-// let text = "";
+// let text = `a`.repeat(20) + "b".repeat(20) + "c".repeat(20) + "d".repeat(20);
+let text = "";
 let caretIndex = text.length;
-let settingState = false;
-let isShiftPressed = false;
 let maxTextLength = 9000;
-let textRenderLimit = 40;
-let textRenderOffsetEnd = 0;
+// let textRenderLimit = 40;
+// let textRenderOffsetEnd = 0;
+let globalStatus = new GlobalStatus(EGlobalStatus.Connecting);
+
+declare function io(opts?: string): Socket;
+
+const socket = io("ws://0.0.0.0:8080");
+
+socket.on("connect", () => {
+    globalStatus.state = EGlobalStatus.Menu;
+});
+
+socket.on("disconnect", () => {
+    globalStatus.state = EGlobalStatus.Connecting;
+});
+
+socket.on("hello", (data: string) => {
+    console.log(data);
+});
+
+socket.emit("hello", "hello");
 
 const states = new States([
     {
@@ -48,20 +119,20 @@ const states = new States([
 
 function main() {
     root.appendChild(TextRender(text, "text-wrapper"));
-    root.appendChild(Setting(settingState));
+    root.appendChild(Setting());
     root.appendChild(StatusBar());
 }
+
 main();
 
 window.addEventListener("keyup", (ev) => {
-    if (ev.key === "Shift") {
-        isShiftPressed = false;
-    }
+    pressedKeys.up(ev.key);
 });
 
 window.addEventListener("keydown", (ev) => {
-    if (settingState) return;
+    // if (globalStatus.state === EGlobalStatus.Setting) return;
 
+    pressedKeys.down(ev.key);
     switch (ev.key) {
         case "Backspace": {
             if (caretIndex === 0) return;
@@ -72,7 +143,7 @@ window.addEventListener("keydown", (ev) => {
             return;
         }
         case "Enter": {
-            if (isShiftPressed) {
+            if (pressedKeys.Shift) {
                 handleShiftEnter();
                 text = removeFromStart(text, maxTextLength);
                 caretIndex = clamp(0, caretIndex, maxTextLength);
@@ -97,11 +168,9 @@ window.addEventListener("keydown", (ev) => {
             return;
         }
         case "Escape": {
-            settingState = !settingState;
-            return;
-        }
-        case "Shift": {
-            isShiftPressed = true;
+            globalStatus.toggle(EGlobalStatus.Setting, EGlobalStatus.Menu);
+            console.log(globalStatus);
+            replaceSetting();
             return;
         }
     }
@@ -113,8 +182,8 @@ window.addEventListener("keydown", (ev) => {
         caretIndex = clamp(0, caretIndex + 1, maxTextLength);
     }
     changeText();
-    console.log("ci", caretIndex);
-    console.log("tl", text.length);
+    // console.log("ci", caretIndex);
+    // console.log("tl", text.length);
 });
 
 function handleShiftEnter() {
@@ -239,7 +308,6 @@ function textWrapperListener(ev: Event) {
         clearClassNameForTextWrapper("caret");
         const wrapperChildren = id("text-wrapper").children;
         (wrapperChildren[wrapperChildren.length - 1].lastChild as HTMLElement)?.classList.add("caret");
-        // replaceText();
     }
 }
 
@@ -253,23 +321,23 @@ function replaceText() {
 }
 
 function replaceSetting() {
-    replace(id("setting-wrapper"), Setting(settingState));
+    replace(id("Setting"), Setting());
 }
 
-function Setting(displayState: boolean) {
-    if (!displayState) {
-        return _``;
+function Setting() {
+    if (globalStatus.state !== EGlobalStatus.Setting) {
+        return _`;Setting;`;
     }
 
     const wrapper = _`
-    ;setting-wrapper;
+    ;Setting;
         ;;;Setting;%%style=position: relative;
             ;setting-close;;Close;
     `;
 
     const settingClose = wrapper.querySelector("#setting-close")! as HTMLElement;
     settingClose.addEventListener("click", () => {
-        settingState = false;
+        globalStatus.state = EGlobalStatus.Menu;
         replaceSetting();
     });
 
@@ -328,22 +396,10 @@ function correctByMinMax(stateName: string) {
 
 function StatusBar() {
     const wrapper = _`;StatusBar;`;
-    const bluh = _`;;;--TALK--|TextLength:${text.length}/${maxTextLength}`;
+    const bluh = _`;;;--${globalStatus.state}--|TextLength:${text.length}/${maxTextLength}`;
 
     wrapper.appendChild(bluh);
     return wrapper;
-}
-
-interface ReRenderParam {
-    fn: (...args: any[]) => HTMLElement;
-    root?: HTMLElement;
-    params?: any;
-}
-
-function reReplace(...items: ReRenderParam[]) {
-    for (let i = 0; i < items.length; i++) {
-        replace(items[i].root ?? id(items[i].fn.name), items[i].fn(items[i].params));
-    }
 }
 
 function removeFromStart(string: string, limit: number) {
@@ -352,5 +408,5 @@ function removeFromStart(string: string, limit: number) {
 }
 
 // setInterval(() => {
-//     console.log(states.font_size.state);
+//     console.log(pressedKeys);
 // }, 500);

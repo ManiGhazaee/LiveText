@@ -97,13 +97,14 @@ function generateHTMLFromInfo(info: HTMLElementInfo): HTMLElement {
     }
 
     if (info.content) {
-        info.content = info.content.replaceAll("CTM_IGNR_SEMIC", ";");
-        info.content = info.content.replaceAll("CTM_IGNR_PERC", "%");
-        info.content = info.content.replaceAll("CTM_IGNR_EQ", "=");
-        info.content = info.content.replaceAll("CTM_IGNR_BCKTICK", "`");
-        info.content = info.content.replaceAll("CTM_IGNR_APOS_1", "'");
-        info.content = info.content.replaceAll("CTM_IGNR_APOS_2", '"');
-
+        if (/CTM_IGNR/.test(info.content)) {
+            info.content = info.content.replaceAll("CTM_IGNR_SEMIC", ";");
+            info.content = info.content.replaceAll("CTM_IGNR_PERC", "%");
+            info.content = info.content.replaceAll("CTM_IGNR_EQ", "=");
+            info.content = info.content.replaceAll("CTM_IGNR_BCKTICK", "`");
+            info.content = info.content.replaceAll("CTM_IGNR_APOS_1", "'");
+            info.content = info.content.replaceAll("CTM_IGNR_APOS_2", '"');
+        }
         element.textContent = info.content;
     }
 
@@ -393,5 +394,17 @@ export function clamp(min: number, numbers: number | number[], max: number): num
             result.push(Math.max(Math.min(numbers[i], max), min));
         }
         return result;
+    }
+}
+
+export interface ReRenderParam {
+    fn: (...args: any[]) => HTMLElement;
+    root?: HTMLElement;
+    params?: any;
+}
+
+export function reReplace(...items: ReRenderParam[]) {
+    for (let i = 0; i < items.length; i++) {
+        replace(items[i].root ?? id(items[i].fn.name), items[i].fn(items[i].params));
     }
 }

@@ -88,6 +88,21 @@ let maxTextLength = 9000;
 // let textRenderOffsetEnd = 0;
 let globalStatus = new GlobalStatus(EGlobalStatus.Connecting);
 
+interface Command {
+    name: string;
+    fn: (...args: any[]) => any;
+    max: number;
+}
+
+const commandIdentifier = "$";
+const commands: Command[] = [
+    {
+        name: "clear",
+        fn: cmdClear,
+        max: 0,
+    },
+];
+
 declare function io(opts?: string): Socket;
 
 const socket = io("ws://0.0.0.0:8080");
@@ -187,14 +202,11 @@ window.addEventListener("keydown", (ev) => {
 });
 
 function handleShiftEnter() {
-    if (text.endsWith("/clear")) {
-        text = "";
-        caretIndex = text.length;
-        replaceText();
-        return;
-    }
+    const hasExecuted = checkForCommand(text);
 
-    sendMessage();
+    if (!hasExecuted) {
+        sendMessage();
+    }
 }
 
 function sendMessage() {
@@ -405,6 +417,50 @@ function StatusBar() {
 function removeFromStart(string: string, limit: number) {
     if (string.length < limit) return string;
     return string.slice(string.length - limit, string.length);
+}
+
+function cmdClear() {
+    text = "";
+    caretIndex = text.length;
+    replaceText();
+}
+
+function parseCommand(string: string): string[] | null {
+    for (let i = string.length - 1; i >= 0; i--) {
+        if (string[i] === commandIdentifier) {
+            return string
+                .slice(i + 1, string.length)
+                .split(" ")
+                .filter(Boolean);
+        }
+    }
+    return null;
+}
+
+/**
+ *
+ * @param string
+ * @returns boolean - true: command executed, false: command didnt execute
+ */
+function checkForCommand(string: string): boolean {
+    const parsed = parseCommand(string);
+    if (parsed === null || parsed.length === 0) {
+        return false;
+    }
+
+    return handleCommand(parsed);
+}
+
+function handleCommand(parseCommand: string[]): boolean {
+    const commandName = parseCommand[0];
+    for (let i = 0; i < commands.length; i++) {
+        if (commands[i].name === commandName) {
+            if (parseCommand.length - 1 !== commands[i].max) return false;
+            commands[i].fn(...parseCommand.slice(1));
+            return true;
+        }
+    }
+    return false;
 }
 
 // setInterval(() => {

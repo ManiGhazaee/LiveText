@@ -38,13 +38,13 @@ class GlobalStatus {
             fn: StatusBar,
         });
     }
-    toggle(valA: EGlobalStatus, valB: EGlobalStatus) {
-        if (this._state === valA) {
-            this.state = valB;
-        } else if (this._state === valB) {
-            this.state = valA;
+    toggle(stateA: EGlobalStatus, stateB: EGlobalStatus) {
+        if (this._state === stateA) {
+            this.state = stateB;
+        } else if (this._state === stateB) {
+            this.state = stateA;
         } else {
-            this.state = valA;
+            this.state = stateA;
         }
     }
 }
@@ -101,25 +101,61 @@ const commands: Command[] = [
         fn: cmdClear,
         max: 0,
     },
+    {
+        name: "math",
+        fn: cmdMath,
+        max: 1,
+    },
+    {
+        name: "room_join",
+        fn: cmdRoomJoin,
+        max: 1,
+    },
+    {
+        name: "room_create",
+        fn: cmdRoomCreate,
+        max: 1,
+    },
 ];
 
 declare function io(opts?: string): Socket;
 
+let room = "";
+
 const socket = io("ws://0.0.0.0:8080");
 
-socket.on("connect", () => {
-    globalStatus.state = EGlobalStatus.Menu;
-});
+if (socket) {
+    socket.on("connect", () => {
+        globalStatus.state = EGlobalStatus.Menu;
+    });
 
-socket.on("disconnect", () => {
-    globalStatus.state = EGlobalStatus.Connecting;
-});
+    socket.on("disconnect", () => {
+        globalStatus.state = EGlobalStatus.Connecting;
+    });
 
-socket.on("hello", (data: string) => {
-    console.log(data);
-});
+    socket.on("room_join", (data: { success: boolean; msg: string; room: string }) => {
+        console.log(data);
+        room = data.room;
 
-socket.emit("hello", "hello");
+        text = "\n/*" + data.msg + "*/\n";
+        caretIndex = text.length;
+        replaceText();
+    });
+
+    socket.on("room_create", (data: { success: boolean; msg: string }) => {
+        console.log(data);
+
+        text += "\n/*" + data.msg + "*/\n";
+        caretIndex = text.length;
+        replaceText();
+    });
+
+    socket.on("text", (data: { text: string; caretIndex: number }) => {
+        text = data.text;
+        caretIndex = data.caretIndex;
+        changeText();
+    });
+}
 
 const states = new States([
     {
@@ -148,6 +184,7 @@ window.addEventListener("keydown", (ev) => {
     // if (globalStatus.state === EGlobalStatus.Setting) return;
 
     pressedKeys.down(ev.key);
+
     switch (ev.key) {
         case "Backspace": {
             if (caretIndex === 0) return;
@@ -215,6 +252,7 @@ function sendMessage() {
     caretIndex = clamp(0, text.length, maxTextLength);
 
     changeText();
+    socket.emit("text", { text, caretIndex });
 }
 
 function TextRender(text: string, wrapperId: string, limit?: number, offsetEnd?: number) {
@@ -272,6 +310,7 @@ function changeText() {
     });
 
     updateTextWrapperHtml(wrapper, newText);
+    
     // const newWrapper = id("text-wrapper");
     // newWrapper.addEventListener("mousedown", textWrapperListener);
 }
@@ -419,24 +458,6 @@ function removeFromStart(string: string, limit: number) {
     return string.slice(string.length - limit, string.length);
 }
 
-function cmdClear() {
-    text = "";
-    caretIndex = text.length;
-    replaceText();
-}
-
-function parseCommand(string: string): string[] | null {
-    for (let i = string.length - 1; i >= 0; i--) {
-        if (string[i] === commandIdentifier) {
-            return string
-                .slice(i + 1, string.length)
-                .split(" ")
-                .filter(Boolean);
-        }
-    }
-    return null;
-}
-
 /**
  *
  * @param string
@@ -444,11 +465,26 @@ function parseCommand(string: string): string[] | null {
  */
 function checkForCommand(string: string): boolean {
     const parsed = parseCommand(string);
-    if (parsed === null || parsed.length === 0) {
+    if (parsed === null || parsed.splitted.length === 0) {
         return false;
     }
 
-    return handleCommand(parsed);
+    return handleCommand(parsed.splitted);
+}
+
+function parseCommand(string: string): { splitted: string[]; slice: string } | null {
+    for (let i = string.length - 1; i >= 0; i--) {
+        if (string[i] === commandIdentifier) {
+            return {
+                slice: string.slice(i, string.length),
+                splitted: string
+                    .slice(i + 1, string.length)
+                    .split(" ")
+                    .filter(Boolean),
+            };
+        }
+    }
+    return null;
 }
 
 function handleCommand(parseCommand: string[]): boolean {
@@ -463,6 +499,33 @@ function handleCommand(parseCommand: string[]): boolean {
     return false;
 }
 
+function cmdClear() {
+    text = "";
+    caretIndex = text.length;
+    replaceText();
+}
+
+function cmdMath(str: string) {
+    if (/^[0-9()+-/*]+$/.test(str) && str.length < 40) {
+        const { slice } = parseCommand(text)!;
+        text = text.slice(0, text.length - slice.length);
+        text += eval(str);
+    }
+    caretIndex = text.length;
+    replaceText();
+}
+
+function cmdRoomJoin(str: string) {
+    if (socket) {
+        socket.emit("room_join", { room: str });
+    }
+}
+
+function cmdRoomCreate(str: string) {
+    if (socket) {
+        socket.emit("room_create", { room: str });
+    }
+}
 // setInterval(() => {
 //     console.log(pressedKeys);
 // }, 500);

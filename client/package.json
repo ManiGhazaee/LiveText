@@ -12,10 +12,5 @@
     "devDependencies": {
         "typescript": "^5.2.2"
     },
-    "dependencies": {
-        "@types/socket.io-client": "^3.0.0",
-        "socket.io-client": "^4.7.2",
-        "webpack": "^5.88.2",
-        "webpack-cli": "^5.1.4"
-    }
+    "dependencies": {}
 }

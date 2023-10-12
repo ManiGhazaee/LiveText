@@ -10,9 +10,8 @@ import {
     clamp,
     reReplace,
 } from "./lib.js";
-import { Socket } from "socket.io-client";
 
-enum EGlobalStatus {
+enum EGS /* EnumGlobalStatus */ {
     Talk = "TALK",
     Listen = "LISTEN",
     TalkRequest = "TALK-REQUEST",
@@ -26,23 +25,28 @@ enum EGlobalStatus {
 }
 
 class GlobalStatus {
-    private _state: EGlobalStatus;
-    public prev: EGlobalStatus;
-    constructor(initVal: EGlobalStatus) {
+    private _state: EGS;
+    public prev: EGS;
+    constructor(initVal: EGS) {
         this._state = initVal;
         this.prev = initVal;
     }
     get state() {
         return this._state;
     }
-    set state(newVal: EGlobalStatus) {
+    set state(newVal: EGS) {
         this.prev = this._state;
         this._state = newVal;
         reReplace({
             fn: StatusBar,
         });
+        if (this._state === EGS.Listen || this._state === EGS.ForceListen || this._state === EGS.TalkRequest) {
+            document.documentElement.style.setProperty("--primary-color", "#acacac");
+        } else {
+            document.documentElement.style.setProperty("--primary-color", "#fff");
+        }
     }
-    toggle(stateA: EGlobalStatus, stateB: EGlobalStatus) {
+    toggle(stateA: EGS, stateB: EGS) {
         if (this._state === stateA) {
             this.state = stateB;
         } else if (this._state === stateB) {
@@ -51,7 +55,7 @@ class GlobalStatus {
             this.state = stateA;
         }
     }
-    toggleWithPrev(state: EGlobalStatus) {
+    toggleWithPrev(state: EGS) {
         if (this._state === state) {
             this.state = this.prev;
         } else if (this._state === this.prev) {
@@ -99,7 +103,7 @@ let caretIndex = text.length;
 let maxTextLength = 9000;
 // let textRenderLimit = 40;
 // let textRenderOffsetEnd = 0;
-let globalStatus = new GlobalStatus(EGlobalStatus.Connecting);
+let gs = new GlobalStatus(EGS.Connecting);
 
 interface Command {
     name: string;
@@ -107,7 +111,7 @@ interface Command {
     max: number;
 }
 
-const commandIdentifier = "$";
+const cmdId = "$";
 const commands: Command[] = [
     {
         name: "clear",
@@ -139,9 +143,12 @@ const commands: Command[] = [
         fn: cmdLeave,
         max: 0,
     },
+    {
+        name: "cya",
+        fn: cmdLeave,
+        max: 0,
+    },
 ];
-
-declare function io(opts?: string): Socket;
 
 let room = "";
 class Participants {
@@ -164,14 +171,15 @@ class Participants {
 }
 let parNames = new Participants();
 
+declare function io(opts?: string): Socket;
 const socket = io("ws://0.0.0.0:8080");
 
 socket.on("connect", () => {
-    globalStatus.state = EGlobalStatus.Menu;
+    gs.state = EGS.Menu;
 });
 
 socket.on("disconnect", () => {
-    globalStatus.state = EGlobalStatus.Connecting;
+    gs.state = EGS.Connecting;
 });
 
 socket.on("room_join", (data: { success: boolean; msg: string; room: string }) => {
@@ -183,7 +191,7 @@ socket.on("room_join", (data: { success: boolean; msg: string; room: string }) =
     replaceText();
 
     if (data.success) {
-        globalStatus.state = EGlobalStatus.Listen;
+        gs.state = EGS.Listen;
     }
 });
 
@@ -196,14 +204,14 @@ socket.on("room_create", (data: { success: boolean; msg: string; room: string })
     replaceText();
 
     if (data.success) {
-        globalStatus.state = EGlobalStatus.Talk;
+        gs.state = EGS.Talk;
     }
 });
 
 socket.on("send_text", (data: { text: string; caretIndex: number }) => {
     text = data.text;
     caretIndex = data.caretIndex;
-    globalStatus.state = EGlobalStatus.Talk;
+    gs.state = EGS.Talk;
     changeText();
 });
 socket.on("text", (data: { text: string; caretIndex: number }) => {
@@ -212,13 +220,13 @@ socket.on("text", (data: { text: string; caretIndex: number }) => {
     changeText();
 });
 socket.on("talk_request", (data: { room: string }) => {
-    globalStatus.state = EGlobalStatus.ListenRequest;
+    gs.state = EGS.ListenRequest;
 });
 socket.on("force_talk", (data: { room: string }) => {
-    globalStatus.state = EGlobalStatus.ForceListen;
+    gs.state = EGS.ForceListen;
 });
 socket.on("leave", (data: { name: string; room: string }) => {
-    globalStatus.state = EGlobalStatus.Menu;
+    gs.state = EGS.Menu;
     text = `/*"${data.name}" has left "${data.room}" room*/\n`;
     caretIndex = text.length;
     replaceText();
@@ -248,7 +256,7 @@ window.addEventListener("keyup", (ev) => {
 });
 
 window.addEventListener("keydown", (ev) => {
-    // if (globalStatus.state === EGlobalStatus.Setting) return;
+    // if (gs.state === EGS.Setting) return;
 
     pressedKeys.down(ev.key);
 
@@ -287,14 +295,14 @@ window.addEventListener("keydown", (ev) => {
             return;
         }
         case "Escape": {
-            globalStatus.toggleWithPrev(EGlobalStatus.Setting);
-            console.log(globalStatus);
+            gs.toggleWithPrev(EGS.Setting);
+            console.log(gs);
             replaceSetting();
             return;
         }
     }
     if (ev.key.length > 1) return;
-    if (globalStatus.state === EGlobalStatus.Listen || globalStatus.state === EGlobalStatus.ForceListen) return;
+    if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
 
     text = spice(text, caretIndex, 0, ev.key);
     text = removeFromStart(text, maxTextLength);
@@ -309,13 +317,13 @@ window.addEventListener("keydown", (ev) => {
 function handleShiftEnter() {
     const cmdHasExecuted = checkForCommand(text);
 
-    if (globalStatus.state === EGlobalStatus.Listen) {
-        globalStatus.state = EGlobalStatus.TalkRequest;
+    if (gs.state === EGS.Listen) {
+        gs.state = EGS.TalkRequest;
         sendTalkRequest();
         return;
     }
-    if (globalStatus.state === EGlobalStatus.TalkRequest) {
-        globalStatus.state = EGlobalStatus.ForceTalk;
+    if (gs.state === EGS.TalkRequest) {
+        gs.state = EGS.ForceTalk;
         sendForceTalk();
         return;
     }
@@ -340,7 +348,7 @@ function sendMessage() {
 
     changeText();
 
-    globalStatus.state = EGlobalStatus.Listen;
+    gs.state = EGS.Listen;
     socket.emit("send_text", { text, caretIndex });
 }
 
@@ -400,7 +408,7 @@ function changeText() {
 
     updateTextWrapperHtml(wrapper, newText);
 
-    if (globalStatus.state === EGlobalStatus.Talk || globalStatus.state === EGlobalStatus.ForceTalk) {
+    if (gs.state === EGS.Talk || gs.state === EGS.ForceTalk) {
         socket.emit("text", { text, caretIndex });
     }
 }
@@ -460,7 +468,7 @@ function replaceText() {
     });
     replace(wrapper, newChatInput);
 
-    if (socket && globalStatus.state === EGlobalStatus.Talk) {
+    if (socket && gs.state === EGS.Talk) {
         socket.emit("text", { text, caretIndex });
     }
 }
@@ -470,7 +478,7 @@ function replaceSetting() {
 }
 
 function Setting() {
-    if (globalStatus.state !== EGlobalStatus.Setting) {
+    if (gs.state !== EGS.Setting) {
         return _`;Setting;`;
     }
 
@@ -482,7 +490,7 @@ function Setting() {
 
     const settingClose = wrapper.querySelector("#setting-close")! as HTMLElement;
     settingClose.addEventListener("click", () => {
-        globalStatus.state = EGlobalStatus.Menu;
+        gs.state = EGS.Menu;
         replaceSetting();
     });
 
@@ -541,7 +549,7 @@ function correctByMinMax(stateName: string) {
 
 function StatusBar() {
     const wrapper = _`;StatusBar;`;
-    const bluh = _`;;;--${globalStatus.state}--|TextLength:${text.length}/${maxTextLength}`;
+    const bluh = _`;;;--${gs.state}--|TextLength:${text.length}/${maxTextLength}`;
 
     wrapper.appendChild(bluh);
     return wrapper;
@@ -568,7 +576,7 @@ function checkForCommand(string: string): boolean {
 
 function parseCommand(string: string): { splitted: string[]; slice: string } | null {
     for (let i = string.length - 1; i >= 0; i--) {
-        if (string[i] === commandIdentifier) {
+        if (string[i] === cmdId) {
             return {
                 slice: string.slice(i, string.length),
                 splitted: string
@@ -631,7 +639,7 @@ function cmdName(str: string) {
 function cmdLeave() {
     text = `/*Left "${room}"*/`;
     caretIndex = text.length;
-    globalStatus.state = EGlobalStatus.Menu;
+    gs.state = EGS.Menu;
     socket.emit("leave", { name: parNames.self, room });
     replaceText();
 }

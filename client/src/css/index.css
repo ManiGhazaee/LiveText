@@ -1,7 +1,12 @@
+:root {
+    --primary-color: white;
+    --bg-color: black;
+}
+
 html {
-    color: white;
-    font-family:  monospace;
-    background-color: black;
+    color: var(--primary-color);
+    font-family: monospace;
+    background-color: var(--bg-color);
     font-size: 18px;
     overflow: hidden;
 }
@@ -23,8 +28,8 @@ html {
     bottom: 30px;
     left: 8px;
     width: calc(100vw - 16px);
-    background-color: black;
-    color: white;
+    background-color: var(--bg-color);
+    color: var(--primary-color);
     font-size: 18px;
 }
 
@@ -37,8 +42,8 @@ html {
 
 .caret {
     display: inline-block;
-    background-color: white;
-    color: black;
+    background-color: var(--primary-color);
+    color: var(--bg-color);
     height: 100%;
     font-size: 18px;
     animation: blink-animation 1s infinite;
@@ -46,20 +51,20 @@ html {
 
 @keyframes blink-animation {
     0% {
-        background-color: white;
-        color: black;
+        background-color: var(--primary-color);
+        color: var(--bg-color);
     }
     50% {
-        background-color: white;
-        color: black;
+        background-color: var(--primary-color);
+        color: var(--bg-color);
     }
     50.01% {
-        background-color: black;
-        color: white;
+        background-color: var(--bg-color);
+        color: var(--primary-color);
     }
     100% {
-        background-color: black;
-        color: white;
+        background-color: var(--bg-color);
+        color: var(--primary-color);
     }
 }
 
@@ -72,7 +77,7 @@ html {
 }
 
 .setting-item {
-    color: white;
+    color: var(--primary-color);
     outline: none;
     cursor: default;
     width: 100%;
@@ -97,16 +102,16 @@ html {
 }
 
 #setting-close:hover {
-    background-color: white;
-    color: black;
+    background-color: var(--primary-color);
+    color: var(--bg-color);
 }
 
 #StatusBar {
-    background-color: white;
+    background-color: var(--primary-color);
     width: calc(100vw - 16px);
     position: absolute;
     left: 8px;
     bottom: 8px;
-    color: black;
+    color: var(--bg-color);
     font-weight: 900;
 }

@@ -11,6 +11,11 @@ html {
     overflow: hidden;
 }
 
+::selection {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+}
+
 * {
     box-sizing: border-box;
     margin: 0;

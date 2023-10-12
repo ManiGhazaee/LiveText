@@ -46,6 +46,9 @@ class GlobalStatus {
             document.documentElement.style.setProperty("--primary-color", "#fff");
         }
     }
+    toPrev() {
+        this._state = this.prev;
+    }
     toggle(stateA: EGS, stateB: EGS) {
         if (this._state === stateA) {
             this.state = stateB;
@@ -100,7 +103,7 @@ const root = document.getElementById("root")!;
 // let text = `a`.repeat(20) + "b".repeat(20) + "c".repeat(20) + "d".repeat(20);
 let text = "";
 let caretIndex = text.length;
-let maxTextLength = 9000;
+let maxTextLength = 4000;
 // let textRenderLimit = 40;
 // let textRenderOffsetEnd = 0;
 let gs = new GlobalStatus(EGS.Connecting);
@@ -169,7 +172,7 @@ class Participants {
         this._other = str;
     }
 }
-let parNames = new Participants();
+let names = new Participants();
 
 declare function io(opts?: string): Socket;
 const socket = io("ws://0.0.0.0:8080");
@@ -182,30 +185,35 @@ socket.on("disconnect", () => {
     gs.state = EGS.Connecting;
 });
 
-socket.on("room_join", (data: { success: boolean; msg: string; room: string }) => {
+socket.on("room_join", (data: { success: boolean; msg: string; room: string; state: "TALK" | "LISTEN" | "MENU" }) => {
     console.log(data);
     room = data.room;
 
-    text = "\n/*" + data.msg + "*/\n";
+    text = "/*" + data.msg + "*/\n";
     caretIndex = text.length;
     replaceText();
 
     if (data.success) {
-        gs.state = EGS.Listen;
+        switch (data.state) {
+            case "TALK": {
+                gs.state = EGS.Talk;
+                break;
+            }
+            case "LISTEN": {
+                gs.state = EGS.Listen;
+                break;
+            }
+            default: {
+                gs.state = EGS.Menu;
+            }
+        }
     }
 });
 
-socket.on("room_create", (data: { success: boolean; msg: string; room: string }) => {
-    console.log(data);
-    room = data.room;
-
-    text += "\n/*" + data.msg + "*/\n";
+socket.on("joined", (data: { msg: string }) => {
+    text += "/*" + data.msg + "*/\n\n";
     caretIndex = text.length;
     replaceText();
-
-    if (data.success) {
-        gs.state = EGS.Talk;
-    }
 });
 
 socket.on("send_text", (data: { text: string; caretIndex: number }) => {
@@ -227,7 +235,7 @@ socket.on("force_talk", (data: { room: string }) => {
 });
 socket.on("leave", (data: { name: string; room: string }) => {
     gs.state = EGS.Menu;
-    text = `/*"${data.name}" has left "${data.room}" room*/\n`;
+    text = `/*"${data.name}" closed "${data.room}"*/\n`;
     caretIndex = text.length;
     replaceText();
 });
@@ -310,8 +318,6 @@ window.addEventListener("keydown", (ev) => {
         caretIndex = clamp(0, caretIndex + 1, maxTextLength);
     }
     changeText();
-    // console.log("ci", caretIndex);
-    // console.log("tl", text.length);
 });
 
 function handleShiftEnter() {
@@ -342,7 +348,7 @@ function sendForceTalk() {
 }
 
 function sendMessage() {
-    text += `\n/*${parNames.self}|${hoursAndMinutes(new Date())}*/\n\n`;
+    text += `\n/*${names.self}|${hoursAndMinutes(new Date())}*/\n\n`;
     text = removeFromStart(text, maxTextLength);
     caretIndex = clamp(0, text.length, maxTextLength);
 
@@ -490,7 +496,7 @@ function Setting() {
 
     const settingClose = wrapper.querySelector("#setting-close")! as HTMLElement;
     settingClose.addEventListener("click", () => {
-        gs.state = EGS.Menu;
+        gs.toPrev();
         replaceSetting();
     });
 
@@ -619,7 +625,7 @@ function cmdMath(str: string) {
 
 function cmdRoomJoin(str: string) {
     if (socket) {
-        socket.emit("room_join", { room: str });
+        socket.emit("room_join", { name: names.self, room: str });
     }
 }
 
@@ -630,17 +636,17 @@ function cmdRoomCreate(str: string) {
 }
 
 function cmdName(str: string) {
-    parNames.self = str;
-    text = `/*Name changed to "${parNames.self}"*/`;
+    names.self = str;
+    text = `/*Name changed to "${names.self}"*/\n`;
     caretIndex = text.length;
     replaceText();
 }
 
 function cmdLeave() {
-    text = `/*Left "${room}"*/`;
+    text = `/*"${room}" closed*/\n`;
     caretIndex = text.length;
     gs.state = EGS.Menu;
-    socket.emit("leave", { name: parNames.self, room });
+    socket.emit("leave", { name: names.self, room });
     replaceText();
 }
 

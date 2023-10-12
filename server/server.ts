@@ -21,12 +21,17 @@ io.on("connection", (socket) => {
             socket.emit("room_create", {
                 success: false,
                 msg: `Room with the name "${data.room}" already exists. Try choosing another name or don't enter a name.`,
+                room: "",
             });
             return;
         }
         socket.join(data.room);
         room = data.room;
-        socket.emit("room_create", { success: true, msg: `Created and joined room "${data.room}" successfully.` });
+        socket.emit("room_create", {
+            success: true,
+            msg: `Created and joined room "${data.room}" successfully.`,
+            room: data.room,
+        });
     });
     socket.on("room_join", (data: { room: string }) => {
         if (!io.sockets.adapter.rooms.has(data.room)) {
@@ -41,9 +46,29 @@ io.on("connection", (socket) => {
         room = data.room;
         socket.emit("room_join", { success: true, msg: `Joined room "${data.room}" successfully.`, room: data.room });
     });
+    socket.on("send_text", (data: { text: string; caretIndex: number }) => {
+        if (room) {
+            socket.to(room).emit("send_text", data);
+        }
+    });
     socket.on("text", (data: { text: string; caretIndex: number }) => {
         if (room) {
             socket.to(room).emit("text", data);
+        }
+    });
+    socket.on("talk_request", (data: { room: string }) => {
+        if (room) {
+            socket.to(room).emit("talk_request", data);
+        }
+    });
+    socket.on("force_talk", (data: { room: string }) => {
+        if (room) {
+            socket.to(room).emit("force_talk", data);
+        }
+    });
+    socket.on("leave", (data: { name: string; room: string }) => {
+        if (room) {
+            socket.to(room).emit("leave", data);
         }
     });
 });

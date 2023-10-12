@@ -15,6 +15,10 @@ import { Socket } from "socket.io-client";
 enum EGlobalStatus {
     Talk = "TALK",
     Listen = "LISTEN",
+    TalkRequest = "TALK-REQUEST",
+    ListenRequest = "LISTEN-REQUEST",
+    ForceTalk = "FORCE-TALK",
+    ForceListen = "FORCE-LISTEN",
     Idle = "IDLE",
     Connecting = "CONNECTING",
     Menu = "MENU",
@@ -45,6 +49,15 @@ class GlobalStatus {
             this.state = stateA;
         } else {
             this.state = stateA;
+        }
+    }
+    toggleWithPrev(state: EGlobalStatus) {
+        if (this._state === state) {
+            this.state = this.prev;
+        } else if (this._state === this.prev) {
+            this.state = state;
+        } else {
+            this.state = state;
         }
     }
 }
@@ -107,55 +120,109 @@ const commands: Command[] = [
         max: 1,
     },
     {
-        name: "room_join",
+        name: "join",
         fn: cmdRoomJoin,
         max: 1,
     },
     {
-        name: "room_create",
+        name: "create",
         fn: cmdRoomCreate,
         max: 1,
+    },
+    {
+        name: "name",
+        fn: cmdName,
+        max: 1,
+    },
+    {
+        name: "leave",
+        fn: cmdLeave,
+        max: 0,
     },
 ];
 
 declare function io(opts?: string): Socket;
 
 let room = "";
+class Participants {
+    private _self: string = localStorage.getItem("selfName") || "Anonymous";
+    private _other: string = "";
+    constructor() {}
+    get self() {
+        return this._self;
+    }
+    set self(str: string) {
+        this._self = str;
+        localStorage.setItem("selfName", str);
+    }
+    get other() {
+        return this._other;
+    }
+    set other(str: string) {
+        this._other = str;
+    }
+}
+let parNames = new Participants();
 
 const socket = io("ws://0.0.0.0:8080");
 
-if (socket) {
-    socket.on("connect", () => {
-        globalStatus.state = EGlobalStatus.Menu;
-    });
+socket.on("connect", () => {
+    globalStatus.state = EGlobalStatus.Menu;
+});
 
-    socket.on("disconnect", () => {
-        globalStatus.state = EGlobalStatus.Connecting;
-    });
+socket.on("disconnect", () => {
+    globalStatus.state = EGlobalStatus.Connecting;
+});
 
-    socket.on("room_join", (data: { success: boolean; msg: string; room: string }) => {
-        console.log(data);
-        room = data.room;
+socket.on("room_join", (data: { success: boolean; msg: string; room: string }) => {
+    console.log(data);
+    room = data.room;
 
-        text = "\n/*" + data.msg + "*/\n";
-        caretIndex = text.length;
-        replaceText();
-    });
+    text = "\n/*" + data.msg + "*/\n";
+    caretIndex = text.length;
+    replaceText();
 
-    socket.on("room_create", (data: { success: boolean; msg: string }) => {
-        console.log(data);
+    if (data.success) {
+        globalStatus.state = EGlobalStatus.Listen;
+    }
+});
 
-        text += "\n/*" + data.msg + "*/\n";
-        caretIndex = text.length;
-        replaceText();
-    });
+socket.on("room_create", (data: { success: boolean; msg: string; room: string }) => {
+    console.log(data);
+    room = data.room;
 
-    socket.on("text", (data: { text: string; caretIndex: number }) => {
-        text = data.text;
-        caretIndex = data.caretIndex;
-        changeText();
-    });
-}
+    text += "\n/*" + data.msg + "*/\n";
+    caretIndex = text.length;
+    replaceText();
+
+    if (data.success) {
+        globalStatus.state = EGlobalStatus.Talk;
+    }
+});
+
+socket.on("send_text", (data: { text: string; caretIndex: number }) => {
+    text = data.text;
+    caretIndex = data.caretIndex;
+    globalStatus.state = EGlobalStatus.Talk;
+    changeText();
+});
+socket.on("text", (data: { text: string; caretIndex: number }) => {
+    text = data.text;
+    caretIndex = data.caretIndex;
+    changeText();
+});
+socket.on("talk_request", (data: { room: string }) => {
+    globalStatus.state = EGlobalStatus.ListenRequest;
+});
+socket.on("force_talk", (data: { room: string }) => {
+    globalStatus.state = EGlobalStatus.ForceListen;
+});
+socket.on("leave", (data: { name: string; room: string }) => {
+    globalStatus.state = EGlobalStatus.Menu;
+    text = `/*"${data.name}" has left "${data.room}" room*/\n`;
+    caretIndex = text.length;
+    replaceText();
+});
 
 const states = new States([
     {
@@ -220,13 +287,14 @@ window.addEventListener("keydown", (ev) => {
             return;
         }
         case "Escape": {
-            globalStatus.toggle(EGlobalStatus.Setting, EGlobalStatus.Menu);
+            globalStatus.toggleWithPrev(EGlobalStatus.Setting);
             console.log(globalStatus);
             replaceSetting();
             return;
         }
     }
     if (ev.key.length > 1) return;
+    if (globalStatus.state === EGlobalStatus.Listen || globalStatus.state === EGlobalStatus.ForceListen) return;
 
     text = spice(text, caretIndex, 0, ev.key);
     text = removeFromStart(text, maxTextLength);
@@ -239,20 +307,41 @@ window.addEventListener("keydown", (ev) => {
 });
 
 function handleShiftEnter() {
-    const hasExecuted = checkForCommand(text);
+    const cmdHasExecuted = checkForCommand(text);
 
-    if (!hasExecuted) {
+    if (globalStatus.state === EGlobalStatus.Listen) {
+        globalStatus.state = EGlobalStatus.TalkRequest;
+        sendTalkRequest();
+        return;
+    }
+    if (globalStatus.state === EGlobalStatus.TalkRequest) {
+        globalStatus.state = EGlobalStatus.ForceTalk;
+        sendForceTalk();
+        return;
+    }
+
+    if (!cmdHasExecuted) {
         sendMessage();
     }
 }
 
+function sendTalkRequest() {
+    socket.emit("talk_request", { room });
+}
+
+function sendForceTalk() {
+    socket.emit("force_talk", { room });
+}
+
 function sendMessage() {
-    text += `\n/*${"John"}|${hoursAndMinutes(new Date())}*/\n\n`;
+    text += `\n/*${parNames.self}|${hoursAndMinutes(new Date())}*/\n\n`;
     text = removeFromStart(text, maxTextLength);
     caretIndex = clamp(0, text.length, maxTextLength);
 
     changeText();
-    socket.emit("text", { text, caretIndex });
+
+    globalStatus.state = EGlobalStatus.Listen;
+    socket.emit("send_text", { text, caretIndex });
 }
 
 function TextRender(text: string, wrapperId: string, limit?: number, offsetEnd?: number) {
@@ -310,9 +399,10 @@ function changeText() {
     });
 
     updateTextWrapperHtml(wrapper, newText);
-    
-    // const newWrapper = id("text-wrapper");
-    // newWrapper.addEventListener("mousedown", textWrapperListener);
+
+    if (globalStatus.state === EGlobalStatus.Talk || globalStatus.state === EGlobalStatus.ForceTalk) {
+        socket.emit("text", { text, caretIndex });
+    }
 }
 
 function clearClassNameForTextWrapper(className: string) {
@@ -369,6 +459,10 @@ function replaceText() {
         fn: StatusBar,
     });
     replace(wrapper, newChatInput);
+
+    if (socket && globalStatus.state === EGlobalStatus.Talk) {
+        socket.emit("text", { text, caretIndex });
+    }
 }
 
 function replaceSetting() {
@@ -526,6 +620,22 @@ function cmdRoomCreate(str: string) {
         socket.emit("room_create", { room: str });
     }
 }
+
+function cmdName(str: string) {
+    parNames.self = str;
+    text = `/*Name changed to "${parNames.self}"*/`;
+    caretIndex = text.length;
+    replaceText();
+}
+
+function cmdLeave() {
+    text = `/*Left "${room}"*/`;
+    caretIndex = text.length;
+    globalStatus.state = EGlobalStatus.Menu;
+    socket.emit("leave", { name: parNames.self, room });
+    replaceText();
+}
+
 // setInterval(() => {
 //     console.log(pressedKeys);
 // }, 500);

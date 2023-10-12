@@ -112,6 +112,7 @@ interface Command {
     name: string;
     fn: (...args: any[]) => any;
     max: number;
+    min?: number;
 }
 
 const cmdId = "$";
@@ -140,6 +141,7 @@ const commands: Command[] = [
         name: "name",
         fn: cmdName,
         max: 1,
+        min: 0,
     },
     {
         name: "leave",
@@ -178,7 +180,10 @@ declare function io(opts?: string): Socket;
 const socket = io("ws://0.0.0.0:8080");
 
 socket.on("connect", () => {
-    gs.state = EGS.Menu;
+    gs.toPrev();
+    if (gs.state === EGS.Connecting) {
+        gs.state = EGS.Menu;
+    }
 });
 
 socket.on("disconnect", () => {
@@ -271,6 +276,7 @@ window.addEventListener("keydown", (ev) => {
     switch (ev.key) {
         case "Backspace": {
             if (caretIndex === 0) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
             text = spice(text, caretIndex - 1, 1);
             text = removeFromStart(text, maxTextLength);
             caretIndex = clamp(0, caretIndex - 1, maxTextLength);
@@ -284,6 +290,7 @@ window.addEventListener("keydown", (ev) => {
                 caretIndex = clamp(0, caretIndex, maxTextLength);
                 return;
             }
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
             text = spice(text, caretIndex, 0, "\n");
             text = removeFromStart(text, maxTextLength);
             caretIndex = clamp(0, caretIndex + 1, maxTextLength);
@@ -292,12 +299,14 @@ window.addEventListener("keydown", (ev) => {
         }
         case "ArrowRight": {
             if (caretIndex === text.length) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
             caretIndex = clamp(0, caretIndex + 1, maxTextLength);
             changeText();
             return;
         }
         case "ArrowLeft": {
             if (caretIndex === 0) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
             caretIndex = clamp(0, caretIndex - 1, maxTextLength);
             changeText();
             return;
@@ -334,7 +343,7 @@ function handleShiftEnter() {
         return;
     }
 
-    if (!cmdHasExecuted) {
+    if (!cmdHasExecuted && gs.state !== EGS.Menu) {
         sendMessage();
     }
 }
@@ -555,9 +564,16 @@ function correctByMinMax(stateName: string) {
 
 function StatusBar() {
     const wrapper = _`;StatusBar;`;
-    const bluh = _`;;;--${gs.state}--|TextLength:${text.length}/${maxTextLength}`;
+    const elems = _`
+    ;
+    style=display: flex; width: 100%;
+        span;;;--${gs.state}--;
+        style=flex-grow: 1; position: relative;
+        span;;;TextLength:${text.length}/${maxTextLength}
+    `;
+    console.log(elems);
 
-    wrapper.appendChild(bluh);
+    wrapper.appendChild(elems);
     return wrapper;
 }
 
@@ -599,7 +615,11 @@ function handleCommand(parseCommand: string[]): boolean {
     const commandName = parseCommand[0];
     for (let i = 0; i < commands.length; i++) {
         if (commands[i].name === commandName) {
-            if (parseCommand.length - 1 !== commands[i].max) return false;
+            if (
+                parseCommand.length - 1 > commands[i].max ||
+                parseCommand.length - 1 < (commands[i].min ?? commands[i].max)
+            )
+                return false;
             commands[i].fn(...parseCommand.slice(1));
             return true;
         }
@@ -636,10 +656,16 @@ function cmdRoomCreate(str: string) {
 }
 
 function cmdName(str: string) {
-    names.self = str;
-    text = `/*Name changed to "${names.self}"*/\n`;
-    caretIndex = text.length;
-    replaceText();
+    if (!str) {
+        text = `/*Current name: "${names.self}"*/\n`;
+        caretIndex = text.length;
+        replaceText();
+    } else {
+        names.self = str;
+        text = `/*Name changed to "${names.self}"*/\n`;
+        caretIndex = text.length;
+        replaceText();
+    }
 }
 
 function cmdLeave() {

@@ -112,6 +112,8 @@ html {
 }
 
 #StatusBar {
+    display: flex;
+    flex-direction: row;
     background-color: var(--primary-color);
     width: calc(100vw - 16px);
     position: absolute;

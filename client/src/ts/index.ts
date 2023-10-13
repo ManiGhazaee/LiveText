@@ -101,7 +101,39 @@ let pressedKeys = new PressedKeys();
 
 const root = document.getElementById("root")!;
 // let text = `a`.repeat(20) + "b".repeat(20) + "c".repeat(20) + "d".repeat(20);
-let text = "";
+let tutorial = `
+-
+Command [Parameter]: | Usage:                   
+$name                | Shows your current name  
+$name [YOUR_NAME]    | Changing your name       
+$join [ROOM_NAME]    | Joining or creating room by name. max room size = 2
+$leave | $cya | $bye | Leave and close room     
+$clear               | Clear text               
+$math [MATH_EXPR]    | Compute simple math       
+-
+KeyDown (State):                   | Result:
+Shift + Enter                      | Execute command
+Shift + Enter (--TALK--)           | Your state -> (--LISTEN--)       | Their state -> (--TALK--)
+Shift + Enter (--LISTEN--)         | Your state -> (--TALK-REQUEST--) | Their state -> (--LISTEN-REQUEST--)
+Shift + Enter (--TALK-REQUEST--)   | Your state -> (--FORCE-TALK--)   | Their state -> (--FORCE-LISTEN--)
+Shift + Enter (--LISTEN-REQUEST--) | Your state -> (--LISTEN--)       | Their state -> (--TALK--)
+Shift + Enter (--FORCE-TALK--)     | Your state -> (--LISTEN--)       | Their state -> (--TALK--)
+Shift + Enter (--FORCE-LISTEN--)   | Your state -> (--TALK-REQUEST--) | Their state -> (--LISTEN-REQUEST--)
+ArrowLeft                          | Move caret to left
+ArrowRight                         | Move caret to right
+Escape                             | Toggle setting 
+-
+State:             | Live type: 
+--TALK--           | true 
+--LISTEN-REQUEST-- | true 
+--FORCE-TALK--     | true 
+--LISTEN--         | false 
+--TALK-REQUEST--   | false 
+--FORCE-LISTEN--   | false 
+-
+Change your name if you haven't ($name [YOUR_NAME]) or clear text ($clear) then join a room ($join [ROOM_NAME])
+`;
+let text = tutorial;
 let caretIndex = text.length;
 let maxTextLength = 4000;
 // let textRenderLimit = 40;
@@ -133,11 +165,6 @@ const commands: Command[] = [
         max: 1,
     },
     {
-        name: "create",
-        fn: cmdRoomCreate,
-        max: 1,
-    },
-    {
         name: "name",
         fn: cmdName,
         max: 1,
@@ -150,6 +177,11 @@ const commands: Command[] = [
     },
     {
         name: "cya",
+        fn: cmdLeave,
+        max: 0,
+    },
+    {
+        name: "bye",
         fn: cmdLeave,
         max: 0,
     },
@@ -276,7 +308,7 @@ window.addEventListener("keydown", (ev) => {
     switch (ev.key) {
         case "Backspace": {
             if (caretIndex === 0) return;
-            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen || gs.state === EGS.TalkRequest) return;
             text = spice(text, caretIndex - 1, 1);
             text = removeFromStart(text, maxTextLength);
             caretIndex = clamp(0, caretIndex - 1, maxTextLength);
@@ -290,7 +322,7 @@ window.addEventListener("keydown", (ev) => {
                 caretIndex = clamp(0, caretIndex, maxTextLength);
                 return;
             }
-            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen || gs.state === EGS.TalkRequest) return;
             text = spice(text, caretIndex, 0, "\n");
             text = removeFromStart(text, maxTextLength);
             caretIndex = clamp(0, caretIndex + 1, maxTextLength);
@@ -299,27 +331,26 @@ window.addEventListener("keydown", (ev) => {
         }
         case "ArrowRight": {
             if (caretIndex === text.length) return;
-            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen || gs.state === EGS.TalkRequest) return;
             caretIndex = clamp(0, caretIndex + 1, maxTextLength);
             changeText();
             return;
         }
         case "ArrowLeft": {
             if (caretIndex === 0) return;
-            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
+            if (gs.state === EGS.Listen || gs.state === EGS.ForceListen || gs.state === EGS.TalkRequest) return;
             caretIndex = clamp(0, caretIndex - 1, maxTextLength);
             changeText();
             return;
         }
         case "Escape": {
             gs.toggleWithPrev(EGS.Setting);
-            console.log(gs);
             replaceSetting();
             return;
         }
     }
     if (ev.key.length > 1) return;
-    if (gs.state === EGS.Listen || gs.state === EGS.ForceListen) return;
+    if (gs.state === EGS.Listen || gs.state === EGS.ForceListen || gs.state === EGS.TalkRequest) return;
 
     text = spice(text, caretIndex, 0, ev.key);
     text = removeFromStart(text, maxTextLength);
@@ -344,7 +375,7 @@ function handleShiftEnter() {
     }
 
     if (!cmdHasExecuted && gs.state !== EGS.Menu) {
-        sendMessage();
+        sendText();
     }
 }
 
@@ -356,7 +387,7 @@ function sendForceTalk() {
     socket.emit("force_talk", { room });
 }
 
-function sendMessage() {
+function sendText() {
     text += `\n/*${names.self}|${hoursAndMinutes(new Date())}*/\n\n`;
     text = removeFromStart(text, maxTextLength);
     caretIndex = clamp(0, text.length, maxTextLength);
@@ -423,7 +454,7 @@ function changeText() {
 
     updateTextWrapperHtml(wrapper, newText);
 
-    if (gs.state === EGS.Talk || gs.state === EGS.ForceTalk) {
+    if (gs.state === EGS.Talk || gs.state === EGS.ForceTalk || gs.state === EGS.ListenRequest) {
         socket.emit("text", { text, caretIndex });
     }
 }
@@ -483,7 +514,7 @@ function replaceText() {
     });
     replace(wrapper, newChatInput);
 
-    if (socket && gs.state === EGS.Talk) {
+    if (gs.state === EGS.Talk || gs.state === EGS.ForceTalk || gs.state === EGS.ListenRequest) {
         socket.emit("text", { text, caretIndex });
     }
 }
@@ -571,7 +602,6 @@ function StatusBar() {
         style=flex-grow: 1; position: relative;
         span;;;TextLength:${text.length}/${maxTextLength}
     `;
-    console.log(elems);
 
     wrapper.appendChild(elems);
     return wrapper;
@@ -634,13 +664,21 @@ function cmdClear() {
 }
 
 function cmdMath(str: string) {
-    if (/^[0-9()+-/*]+$/.test(str) && str.length < 40) {
+    if (/^[0-9\(\)+-/*]+$/.test(str) && str.length < 40) {
         const { slice } = parseCommand(text)!;
         text = text.slice(0, text.length - slice.length);
-        text += eval(str);
+        try {
+            eval(str);
+            text += eval(str);
+            caretIndex = text.length;
+            replaceText();
+        } catch (e) {
+            console.error(e);
+            caretIndex = text.length;
+            replaceText();
+            return;
+        }
     }
-    caretIndex = text.length;
-    replaceText();
 }
 
 function cmdRoomJoin(str: string) {
@@ -649,20 +687,14 @@ function cmdRoomJoin(str: string) {
     }
 }
 
-function cmdRoomCreate(str: string) {
-    if (socket) {
-        socket.emit("room_create", { room: str });
-    }
-}
-
 function cmdName(str: string) {
     if (!str) {
-        text = `/*Current name: "${names.self}"*/\n`;
+        text += `\n/*Current name: "${names.self}"*/\n`;
         caretIndex = text.length;
         replaceText();
     } else {
         names.self = str;
-        text = `/*Name changed to "${names.self}"*/\n`;
+        text += `\n/*Name changed to "${names.self}"*/\n`;
         caretIndex = text.length;
         replaceText();
     }

@@ -408,3 +408,9 @@ export function reReplace(...items: ReRenderParam[]) {
         replace(items[i].root ?? id(items[i].fn.name), items[i].fn(items[i].params));
     }
 }
+
+function dbg(o: { [key: string]: any }): void {
+    for (const key in o) {
+        console.log(key + " =", o[key]);
+    }
+}

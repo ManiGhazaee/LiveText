@@ -173,7 +173,7 @@ export const enum SettingModes {
     string,
 }
 
-export class States {
+export class SettingStates {
     [key: string]: {
         state: any;
         mode: SettingModes;
@@ -409,8 +409,21 @@ export function reReplace(...items: ReRenderParam[]) {
     }
 }
 
-function dbg(o: { [key: string]: any }): void {
+export function dbg(o: { [key: string]: any }): void {
     for (const key in o) {
         console.log(key + " =", o[key]);
     }
+}
+
+export function lsSyncedStates<T extends object>(obj: T) {
+    return new Proxy(obj, {
+        get(obj, prop) {
+            return localStorage.getItem(prop.toString()) || Reflect.get(obj, prop);
+        },
+        set(obj, prop, value) {
+            localStorage.setItem(prop.toString(), value);
+            Reflect.set(obj, prop, value);
+            return true;
+        },
+    });
 }

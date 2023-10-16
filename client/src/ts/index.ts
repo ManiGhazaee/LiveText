@@ -217,7 +217,7 @@ let lss = lsSyncedStates(new LocalStorageStates());
 let room = "";
 let names = new Participants();
 
-const socket = io("ws://0.0.0.0:8080");
+const socket = io("https://live-text-server.onrender.com");
 
 main();
 
@@ -714,7 +714,7 @@ function cmdManual() {
 
 function cmdClearLine() {
     for (let i = text.length - 1; i >= 0; i--) {
-        if (text[i] === "\n") {
+        if (text[i] === "\n" || i === 0) {
             text = text.slice(0, i);
             caretIndex = text.length;
             changeText();

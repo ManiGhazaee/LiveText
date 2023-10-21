@@ -418,7 +418,7 @@ export function dbg(o: { [key: string]: any }): void {
 export function lsSyncedStates<T extends object>(obj: T) {
     return new Proxy(obj, {
         get(obj, prop) {
-            return localStorage.getItem(prop.toString()) || Reflect.get(obj, prop);
+            return localStorage.getItem(prop.toString()) ?? Reflect.get(obj, prop);
         },
         set(obj, prop, value) {
             localStorage.setItem(prop.toString(), value);

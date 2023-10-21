@@ -119,10 +119,13 @@ class Participants {
 }
 
 class LocalStorageStates {
-    endInfo: bool = 1;
+    endInfo: Bool = Bool.true;
 }
 
-type bool = 0 | 1;
+enum Bool {
+    true = "1",
+    false = "0",
+}
 interface Command {
     name: string;
     fn: (...args: any[]) => any;
@@ -385,7 +388,7 @@ function sendForceTalk() {
 }
 
 function sendText() {
-    if (lss.endInfo === 1) {
+    if (lss.endInfo === Bool.true) {
         text += `\n/*${names.self}|${hoursAndMinutes(new Date())}*/\n\n`;
         text = removeFromStart(text, maxTextLength);
         caretIndex = clamp(0, text.length, maxTextLength);
@@ -729,17 +732,19 @@ function cmdEndInfo(str?: string) {
         caretIndex = text.length;
         changeText();
     } else {
-        if (str === "0") {
-            lss.endInfo = 0;
-            text += `\n/*end_info: (${lss.endInfo})*/\n`;
-            caretIndex = text.length;
-            changeText();
-        } else if (str === "1") {
-            lss.endInfo = 1;
-            text += `\n/*end_info: (${lss.endInfo})*/\n`;
-            caretIndex = text.length;
-            changeText();
+        switch (str) {
+            case Bool.true: {
+                lss.endInfo = Bool.true;
+                break;
+            }
+            case Bool.false: {
+                lss.endInfo = Bool.false;
+                break;
+            }
         }
+        text += `\n/*end_info: (${lss.endInfo})*/\n`;
+        caretIndex = text.length;
+        changeText();
     }
 }
 
